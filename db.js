@@ -45,7 +45,15 @@ function ensure() {
           createdAt: new Date().toISOString()
         }
       ],
-      registrations: []
+      registrations: [],
+      settings: {
+        paymentQr: '', // base64 data URL of the bank/PromptPay QR image
+        bankName: '',
+        accountName: '',
+        accountNumber: '',
+        note: '',
+        updatedAt: null
+      }
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2));
   }
@@ -64,6 +72,28 @@ function write(data) {
 // simple id generator
 export function uid(prefix = 'id') {
   return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// ---------- Settings (payment/bank QR) ----------
+export function getSettings() {
+  const db = read();
+  return (
+    db.settings || {
+      paymentQr: '',
+      bankName: '',
+      accountName: '',
+      accountNumber: '',
+      note: '',
+      updatedAt: null
+    }
+  );
+}
+
+export function saveSettings(patch) {
+  const db = read();
+  db.settings = Object.assign(getSettings(), patch, { updatedAt: new Date().toISOString() });
+  write(db);
+  return db.settings;
 }
 
 // ---------- Workshops ----------
@@ -170,9 +200,13 @@ export function createRegistration(payload) {
     people: Number(payload.people) || 1,
     note: payload.note || '',
     amount: Number(payload.amount) || 0,
-    status: 'pending_payment', // pending_payment -> paid -> confirmed  (or cancelled)
-    paymentMethod: '',
+    // pending_payment -> awaiting_verification -> paid -> confirmed  (or cancelled)
+    status: 'pending_payment',
+    paymentMethod: 'bank_transfer',
     paymentRef: '',
+    slipImage: '', // base64 data URL of the payment slip the participant uploads
+    paidNote: '',
+    notifiedAt: null,
     confirmed: false,
     confirmationMessage: '',
     createdAt: new Date().toISOString()

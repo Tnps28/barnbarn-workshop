@@ -32,7 +32,7 @@ const LINE_ADD_FRIEND_URL = process.env.LINE_ADD_FRIEND_URL || '';
 const OMISE_PUBLIC_KEY = process.env.OMISE_PUBLIC_KEY || '';
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- helpers ----------
@@ -65,6 +65,19 @@ app.get('/api/config', (req, res) => {
     lineConfigured: lineConfigured(),
     omisePublicKey: OMISE_PUBLIC_KEY,
     lineAddFriendUrl: LINE_ADD_FRIEND_URL
+  });
+});
+
+// ---------- public: payment info (bank QR + account details) ----------
+app.get('/api/payment-info', (req, res) => {
+  const s = db.getSettings();
+  res.json({
+    configured: Boolean(s.paymentQr || s.accountNumber),
+    paymentQr: s.paymentQr || '',
+    bankName: s.bankName || '',
+    accountName: s.accountName || '',
+    accountNumber: s.accountNumber || '',
+    note: s.note || ''
   });
 });
 
@@ -107,6 +120,20 @@ app.post('/api/register', (req, res) => {
     amount: round.price * people
   });
   res.json({ registration: reg, workshop: { title: ws.title, location: ws.location }, round });
+});
+
+// ---------- public: notify payment (upload slip) ----------
+app.post('/api/register/:id/notify-paid', (req, res) => {
+  const reg = db.getRegistration(req.params.id);
+  if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัคร' });
+  const patch = {
+    status: 'awaiting_verification',
+    notifiedAt: new Date().toISOString(),
+    paidNote: (req.body && req.body.note) || ''
+  };
+  if (req.body && req.body.slipImage) patch.slipImage = req.body.slipImage;
+  const updated = db.updateRegistration(reg.id, patch);
+  res.json({ ok: true, registration: updated });
 });
 
 // ---------- public: pay ----------
@@ -243,6 +270,22 @@ app.post('/api/line/webhook', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- admin: payment settings (bank QR + account) ----------
+app.get('/api/admin/payment-settings', requireAdmin, (req, res) => {
+  res.json(db.getSettings());
+});
+app.post('/api/admin/payment-settings', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const saved = db.saveSettings({
+    paymentQr: b.paymentQr ?? undefined,
+    bankName: b.bankName ?? undefined,
+    accountName: b.accountName ?? undefined,
+    accountNumber: b.accountNumber ?? undefined,
+    note: b.note ?? undefined
+  });
+  res.json(saved);
+});
+
 // admin dashboard summary
 app.get('/api/admin/summary', requireAdmin, (req, res) => {
   const regs = db.listRegistrations();
@@ -250,6 +293,7 @@ app.get('/api/admin/summary', requireAdmin, (req, res) => {
     workshops: db.listWorkshops().length,
     totalRegistrations: regs.length,
     pendingPayment: regs.filter((r) => r.status === 'pending_payment').length,
+    awaitingVerification: regs.filter((r) => r.status === 'awaiting_verification').length,
     paid: regs.filter((r) => r.status === 'paid').length,
     confirmed: regs.filter((r) => r.status === 'confirmed').length,
     revenue: regs
