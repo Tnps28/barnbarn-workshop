@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ผู้ดูแลระบบ — BARNBARN Workshop</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="logo">🌿</span> BARNBARN · ผู้ดูแล</div>
+    <a class="plain" href="/">ดูหน้าเว็บผู้สมัคร ▸</a>
+  </nav>
+
+  <!-- LOGIN -->
+  <main class="wrap" id="login">
+    <div class="panel" style="max-width:420px;margin:40px auto">
+      <h2 style="color:var(--brown);margin-top:0">เข้าสู่ระบบผู้ดูแล</h2>
+      <div id="login-err"></div>
+      <div class="field"><label>รหัสผ่าน</label><input id="pw" type="password" placeholder="รหัสผ่านผู้ดูแล"></div>
+      <button class="btn btn-primary block" onclick="login()">เข้าสู่ระบบ</button>
+      <p class="hint">ค่าเริ่มต้นในไฟล์ .env คือ <code>barnbarn2026</code> — อย่าลืมเปลี่ยน!</p>
+    </div>
+  </main>
+
+  <!-- APP -->
+  <main class="wrap hidden" id="app">
+    <div class="stat-grid" id="stats"></div>
+
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
+      <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
+    </div>
+
+    <h2 class="section-title">เวิร์กช็อปทั้งหมด</h2>
+    <div id="ws-list" class="grid"></div>
+
+    <h2 class="section-title" style="margin-top:36px">รายชื่อผู้สมัคร</h2>
+    <div class="panel" style="padding:8px;overflow:auto">
+      <div style="padding:8px 12px">
+        <select id="filter-status" onchange="renderRegs()" style="max-width:240px">
+          <option value="">ทุกสถานะ</option>
+          <option value="pending_payment">รอชำระเงิน</option>
+          <option value="paid">ชำระแล้ว (รอยืนยัน)</option>
+          <option value="confirmed">ยืนยันแล้ว</option>
+          <option value="cancelled">ยกเลิก</option>
+        </select>
+      </div>
+      <table>
+        <thead><tr><th>ผู้สมัคร</th><th>เวิร์กช็อป / รอบ</th><th>ยอด</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody id="reg-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- WORKSHOP MODAL -->
+  <div class="modal-bg" id="ws-modal">
+    <div class="modal">
+      <h3 id="ws-modal-title">เพิ่มเวิร์กช็อป</h3>
+      <input type="hidden" id="ws-id">
+      <div class="field"><label>ชื่อเวิร์กช็อป <span class="req">*</span></label><input id="f-title" placeholder="เช่น เวิร์กช็อปทำเทียนหอม"></div>
+      <div class="field"><label>ชื่อรอง (อังกฤษ)</label><input id="f-subtitle" placeholder="Scented Candle Making"></div>
+      <div class="field"><label>หมวดหมู่</label><input id="f-category" placeholder="งานคราฟต์ / Craft"></div>
+      <div class="field"><label>รายละเอียด</label><textarea id="f-desc" placeholder="สิ่งที่จะได้เรียนรู้ อุปกรณ์ที่แถม ฯลฯ"></textarea></div>
+      <div class="field"><label>สถานที่</label><input id="f-location" placeholder="BARNBARN Studio ..."></div>
+      <div class="field"><label>ลิงก์รูปภาพ (ไม่บังคับ)</label><input id="f-image" placeholder="https://..."></div>
+
+      <label style="font-weight:700;color:var(--brown)">รอบ (วันที่ · เวลา · ที่นั่ง · ราคา)</label>
+      <div id="rounds-wrap"></div>
+      <button class="btn btn-ghost btn-sm mt" onclick="addRoundRow()">➕ เพิ่มรอบ</button>
+
+      <div class="field mt"><label><input type="checkbox" id="f-active" checked style="width:auto"> เปิดรับสมัคร (แสดงบนหน้าเว็บ)</label></div>
+
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveWorkshop()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM MODAL -->
+  <div class="modal-bg" id="confirm-modal">
+    <div class="modal">
+      <h3>ส่งข้อความยืนยันทาง LINE</h3>
+      <div id="confirm-body"></div>
+    </div>
+  </div>
+
+  <script>
+    let PW = '';
+    const H = () => ({ 'Content-Type':'application/json', 'x-admin-password': PW });
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const fmtDate = (d) => { if(!d) return ''; try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});} catch { return d; } };
+    let WORKSHOPS = [], REGS = [], CFG = {};
+
+    async function login() {
+      PW = document.getElementById('pw').value;
+      const res = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password: PW }) });
+      if (!res.ok) { document.getElementById('login-err').innerHTML = '<div class="alert err">รหัสผ่านไม่ถูกต้อง</div>'; return; }
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      CFG = await (await fetch('/api/config')).json();
+      loadAll();
+    }
+
+    async function loadAll() {
+      const [wRes, sRes] = await Promise.all([
+        fetch('/api/admin/workshops', { headers: H() }),
+        fetch('/api/admin/summary', { headers: H() })
+      ]);
+      WORKSHOPS = await wRes.json();
+      const s = await sRes.json();
+      document.getElementById('stats').innerHTML = `
+        ${stat(s.totalRegistrations,'ผู้สมัครทั้งหมด')}
+        ${stat(s.pendingPayment,'รอชำระเงิน')}
+        ${stat(s.paid,'ชำระแล้ว รอยืนยัน')}
+        ${stat(s.confirmed,'ยืนยันแล้ว')}
+        ${stat(money(s.revenue)+' ฿','ยอดรับชำระ')}`;
+      renderWorkshops();
+      await loadRegs();
+    }
+    const stat = (n,l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+
+    function renderWorkshops() {
+      document.getElementById('ws-list').innerHTML = WORKSHOPS.map(w => `
+        <div class="card"><div class="body">
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <span class="tag">${w.active?'เปิดรับ':'ปิดอยู่'}</span>
+            <span class="muted" style="font-size:12px">${w.rounds.length} รอบ</span>
+          </div>
+          <h3>${w.title}</h3>
+          <div class="rounds">${w.rounds.map(r=>`📅 ${fmtDate(r.date)} · ${r.time} · <b>${r.taken}/${r.seats}</b> ที่ · ${money(r.price)}฿`).join('<br>')||'<span class="muted">ยังไม่มีรอบ</span>'}</div>
+          <div class="foot" style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="openWorkshop('${w.id}')">แก้ไข</button>
+            <button class="btn btn-ghost btn-sm" onclick="delWorkshop('${w.id}')" style="color:var(--danger);border-color:var(--danger)">ลบ</button>
+          </div>
+        </div></div>`).join('') || '<p class="muted">ยังไม่มีเวิร์กช็อป กด “เพิ่มเวิร์กช็อปใหม่” เพื่อเริ่ม</p>';
+    }
+
+    async function loadRegs() {
+      REGS = await (await fetch('/api/admin/registrations', { headers: H() })).json();
+      renderRegs();
+    }
+    function renderRegs() {
+      const f = document.getElementById('filter-status').value;
+      const list = f ? REGS.filter(r=>r.status===f) : REGS;
+      const statusPill = (s) => ({
+        pending_payment:'<span class="pill pending">รอชำระ</span>',
+        paid:'<span class="pill paid">ชำระแล้ว</span>',
+        confirmed:'<span class="pill confirmed">ยืนยันแล้ว</span>',
+        cancelled:'<span class="pill cancelled">ยกเลิก</span>'
+      }[s]||s);
+      document.getElementById('reg-body').innerHTML = list.map(r => `
+        <tr>
+          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}</span></td>
+          <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span></td>
+          <td>${money(r.amount)} ฿</td>
+          <td>${statusPill(r.status)}</td>
+          <td>
+            ${r.status==='pending_payment'?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ทำเครื่องหมายชำระแล้ว</button>`:''}
+            ${r.status==='paid'?`<button class="btn btn-blue btn-sm" onclick="confirmReg('${r.id}')">ส่งยืนยัน LINE</button>`:''}
+            ${r.status!=='cancelled'&&r.status!=='confirmed'?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
+            ${r.status==='confirmed'?'<span class="muted">✓ เสร็จสิ้น</span>':''}
+          </td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:20px">ยังไม่มีผู้สมัคร</td></tr>';
+    }
+
+    async function markPaid(id) { await fetch(`/api/admin/registrations/${id}/mark-paid`,{method:'POST',headers:H()}); loadAll(); }
+    async function cancelReg(id) { if(!confirm('ยกเลิกใบสมัครนี้?'))return; await fetch(`/api/admin/registrations/${id}/cancel`,{method:'POST',headers:H()}); loadAll(); }
+
+    async function confirmReg(id) {
+      const res = await fetch(`/api/admin/registrations/${id}/confirm`,{method:'POST',headers:H()});
+      const data = await res.json();
+      const modal = document.getElementById('confirm-modal');
+      const body = document.getElementById('confirm-body');
+      if (data.sent) {
+        body.innerHTML = `<div class="alert ok">✅ ส่งข้อความยืนยันทาง LINE เรียบร้อยแล้ว</div>
+          <pre style="white-space:pre-wrap;background:#fff;padding:12px;border-radius:10px;border:1px solid var(--line)">${data.message}</pre>
+          <button class="btn btn-primary block" onclick="closeModal();loadAll()">เสร็จสิ้น</button>`;
+      } else {
+        body.innerHTML = `<div class="alert warn">ยังไม่ได้เชื่อม LINE อัตโนมัติ (หรือยังไม่มี LINE userId ของผู้สมัคร)<br>คัดลอกข้อความด้านล่างไปส่งเองผ่านแอป LINE OA ได้เลยค่ะ</div>
+          <textarea id="cmsg" style="min-height:180px">${data.message}</textarea>
+          <div style="display:flex;gap:8px" class="mt">
+            <button class="btn btn-yellow" onclick="copyMsg()">📋 คัดลอกข้อความ</button>
+            <button class="btn btn-primary" style="flex:1" onclick="closeModal();loadAll()">ทำเครื่องหมายยืนยันแล้ว</button>
+          </div>`;
+      }
+      modal.classList.add('open');
+    }
+    function copyMsg(){ const t=document.getElementById('cmsg'); t.select(); document.execCommand('copy'); }
+
+    // ----- workshop modal -----
+    function openWorkshop(id) {
+      const w = id ? WORKSHOPS.find(x=>x.id===id) : null;
+      document.getElementById('ws-modal-title').textContent = w ? 'แก้ไขเวิร์กช็อป' : 'เพิ่มเวิร์กช็อป';
+      document.getElementById('ws-id').value = w?.id || '';
+      document.getElementById('f-title').value = w?.title || '';
+      document.getElementById('f-subtitle').value = w?.subtitle || '';
+      document.getElementById('f-category').value = w?.category || '';
+      document.getElementById('f-desc').value = w?.description || '';
+      document.getElementById('f-location').value = w?.location || '';
+      document.getElementById('f-image').value = w?.image || '';
+      document.getElementById('f-active').checked = w ? w.active : true;
+      document.getElementById('rounds-wrap').innerHTML = '';
+      (w?.rounds?.length ? w.rounds : [{}]).forEach(addRoundRow);
+      document.getElementById('ws-modal').classList.add('open');
+    }
+    function addRoundRow(r={}) {
+      const div = document.createElement('div');
+      div.className = 'round-row';
+      div.innerHTML = `
+        <input type="date" value="${r.date||''}" data-k="date">
+        <input placeholder="13:00–16:00" value="${r.time||''}" data-k="time">
+        <input type="number" placeholder="ที่นั่ง" value="${r.seats??''}" data-k="seats">
+        <input type="number" placeholder="ราคา" value="${r.price??''}" data-k="price">
+        <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+      document.getElementById('rounds-wrap').appendChild(div);
+    }
+    function collectRounds() {
+      return [...document.querySelectorAll('#rounds-wrap .round-row')].map(row => {
+        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value); return o;
+      }).filter(r => r.date);
+    }
+    async function saveWorkshop() {
+      const id = document.getElementById('ws-id').value;
+      const payload = {
+        title: v('f-title'), subtitle: v('f-subtitle'), category: v('f-category'),
+        description: v('f-desc'), location: v('f-location'), image: v('f-image'),
+        active: document.getElementById('f-active').checked, rounds: collectRounds()
+      };
+      if (!payload.title) return alert('กรุณาใส่ชื่อเวิร์กช็อป');
+      const url = id ? '/api/admin/workshops/'+id : '/api/admin/workshops';
+      await fetch(url, { method: id?'PUT':'POST', headers: H(), body: JSON.stringify(payload) });
+      closeModal(); loadAll();
+    }
+    async function delWorkshop(id) {
+      if (!confirm('ลบเวิร์กช็อปนี้? (ผู้สมัครเดิมจะยังอยู่ในระบบ)')) return;
+      await fetch('/api/admin/workshops/'+id, { method:'DELETE', headers: H() });
+      loadAll();
+    }
+    function closeModal(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+    const v = (id) => document.getElementById(id).value.trim();
+    document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) closeModal(); }));
+  </script>
+</body>
+</html>

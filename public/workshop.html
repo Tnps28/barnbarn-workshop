@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>สมัครเวิร์กช็อป — BARNBARN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <script src="https://cdn.omise.co/omise.js.gz"></script>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><a href="/" style="color:inherit;display:flex;gap:10px;align-items:center"><span class="logo">🌿</span> BARNBARN</a></div>
+    <a class="plain" href="/">◂ กลับหน้าแรก</a>
+  </nav>
+
+  <main class="wrap" id="root"><p class="muted">กำลังโหลด…</p></main>
+
+  <div class="footer">🌿 BARNBARN Workshop</div>
+
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const wsId = qs.get('id');
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const fmtDate = (d) => { try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});} catch { return d; } };
+    let WS = null, CFG = null, REG = null, POLL = null;
+
+    async function boot() {
+      const [wRes, cRes] = await Promise.all([ fetch('/api/workshops/'+wsId), fetch('/api/config') ]);
+      if (!wRes.ok) { document.getElementById('root').innerHTML = '<div class="panel">ไม่พบเวิร์กช็อปนี้ · <a href="/">กลับหน้าแรก</a></div>'; return; }
+      WS = await wRes.json(); CFG = await cRes.json();
+      renderStep1();
+    }
+
+    // ---------- STEP 1: เลือกรอบ ----------
+    function renderStep1() {
+      const rounds = WS.rounds.map(r => {
+        const full = r.remaining <= 0;
+        return `<label class="rowline" style="cursor:${full?'not-allowed':'pointer'};opacity:${full?.5:1}">
+          <span class="k"><input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto;margin-right:8px">
+            📅 ${fmtDate(r.date)} · ${r.time}</span>
+          <span class="v">${money(r.price)} บาท ${full?'(เต็ม)':`<span class="muted">· เหลือ ${r.remaining} ที่</span>`}</span>
+        </label>`;
+      }).join('');
+
+      document.getElementById('root').innerHTML = `
+        <div class="two-col">
+          <div class="panel">
+            <div class="steps">
+              <div class="step active">1 · เลือกรอบ</div>
+              <div class="step">2 · กรอกข้อมูล</div>
+              <div class="step">3 · ชำระเงิน</div>
+            </div>
+            <span class="tag">${WS.category||'เวิร์กช็อป'}</span>
+            <h1 style="color:var(--brown);margin:8px 0">${WS.title}</h1>
+            ${WS.subtitle?`<p class="muted" style="margin-top:-6px">${WS.subtitle}</p>`:''}
+            <p>${(WS.description||'').replace(/\n/g,'<br>')}</p>
+            ${WS.location?`<p>📍 <b>สถานที่:</b> ${WS.location}</p>`:''}
+            <h3 style="color:var(--brown)">เลือกวันและรอบ</h3>
+            ${rounds}
+            <div class="field mt">
+              <label>จำนวนผู้เข้าร่วม</label>
+              <select id="people">${[1,2,3,4].map(n=>`<option value="${n}">${n} ท่าน</option>`).join('')}</select>
+            </div>
+            <button class="btn btn-primary block mt" onclick="toStep2()">ถัดไป ▸</button>
+          </div>
+          <aside class="panel">
+            <h3 style="margin-top:0;color:var(--brown)">ทำไมต้อง BARNBARN?</h3>
+            <p class="muted">🌿 วิทยากรดูแลใกล้ชิด<br>🎨 อุปกรณ์ครบ ไม่ต้องเตรียม<br>💳 จ่ายออนไลน์ปลอดภัย<br>💬 ยืนยันและสอบถามได้ทาง LINE</p>
+            <div class="alert info mt">ที่นั่งมีจำนวนจำกัดต่อรอบ · ระบบจะกันที่นั่งให้เมื่อกรอกข้อมูลเสร็จ</div>
+          </aside>
+        </div>`;
+    }
+
+    function toStep2() {
+      const round = document.querySelector('input[name=round]:checked');
+      if (!round) return alert('กรุณาเลือกวันและรอบก่อนค่ะ');
+      const roundId = round.value;
+      const people = Number(document.getElementById('people').value);
+      renderStep2(roundId, people);
+    }
+
+    // ---------- STEP 2: กรอกข้อมูล ----------
+    function renderStep2(roundId, people) {
+      const r = WS.rounds.find(x => x.id === roundId);
+      const total = r.price * people;
+      document.getElementById('root').innerHTML = `
+        <div class="two-col">
+          <div class="panel">
+            <div class="steps">
+              <div class="step done">1 · เลือกรอบ</div>
+              <div class="step active">2 · กรอกข้อมูล</div>
+              <div class="step">3 · ชำระเงิน</div>
+            </div>
+            <h2 style="color:var(--brown);margin-top:6px">ข้อมูลผู้สมัคร</h2>
+            <div id="err"></div>
+            <div class="field"><label>ชื่อ-นามสกุล <span class="req">*</span></label><input id="name" placeholder="เช่น สมหญิง ใจดี"></div>
+            <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>
+            <div class="field"><label>อีเมล</label><input id="email" type="email" placeholder="you@email.com"><div class="hint">ใช้สำหรับใบเสร็จ (ไม่บังคับ)</div></div>
+            <div class="field"><label>LINE ID / ชื่อบน LINE</label><input id="lineId" placeholder="@lineid หรือชื่อของคุณ"><div class="hint">เพื่อให้เราส่งข้อความยืนยันหาคุณได้</div></div>
+            <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="note" placeholder="แพ้อาหาร / มากับเพื่อน / คำถามอื่น ๆ"></textarea></div>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-ghost" onclick="renderStep1()">◂ ย้อนกลับ</button>
+              <button class="btn btn-primary" style="flex:1" onclick="submitReg('${roundId}',${people})">ยืนยันข้อมูล & ไปชำระเงิน ▸</button>
+            </div>
+          </div>
+          <aside class="panel">
+            <h3 style="margin-top:0;color:var(--brown)">สรุปการสมัคร</h3>
+            <div class="rowline"><span class="k">เวิร์กช็อป</span><span class="v">${WS.title}</span></div>
+            <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(r.date)}<br>${r.time}</span></div>
+            <div class="rowline"><span class="k">ราคา/ท่าน</span><span class="v">${money(r.price)} บาท</span></div>
+            <div class="rowline"><span class="k">จำนวน</span><span class="v">${people} ท่าน</span></div>
+            <div class="rowline"><span class="k total">ยอดรวม</span><span class="v total">${money(total)} บาท</span></div>
+          </aside>
+        </div>`;
+    }
+
+    async function submitReg(roundId, people) {
+      const body = {
+        workshopId: wsId, roundId, people,
+        name: val('name'), phone: val('phone'), email: val('email'),
+        lineId: val('lineId'), note: val('note')
+      };
+      if (!body.name || !body.phone) { showErr('กรุณากรอกชื่อและเบอร์โทรศัพท์'); return; }
+      const res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { showErr(data.error || 'เกิดข้อผิดพลาด'); return; }
+      REG = data.registration;
+      renderStep3(data.round);
+    }
+
+    // ---------- STEP 3: ชำระเงิน ----------
+    function renderStep3(round) {
+      const total = REG.amount;
+      document.getElementById('root').innerHTML = `
+        <div class="two-col">
+          <div class="panel">
+            <div class="steps">
+              <div class="step done">1 · เลือกรอบ</div>
+              <div class="step done">2 · กรอกข้อมูล</div>
+              <div class="step active">3 · ชำระเงิน</div>
+            </div>
+            <h2 style="color:var(--brown)">เลือกวิธีชำระเงิน</h2>
+            ${CFG.paymentConfigured ? '' : '<div class="alert warn">โหมดทดลอง (Demo): ยังไม่ได้ตั้งค่าคีย์ชำระเงินจริง — สแกน/กดแล้วผู้จัดจะเป็นผู้ยืนยันการชำระให้</div>'}
+            <div id="pay-area">
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn btn-blue" onclick="payPromptPay()">📱 พร้อมเพย์ (สแกน QR)</button>
+                <button class="btn btn-yellow" onclick="payCardForm()">💳 บัตรเครดิต/เดบิต</button>
+              </div>
+            </div>
+            <div id="pay-result" class="mt"></div>
+          </div>
+          <aside class="panel">
+            <h3 style="margin-top:0;color:var(--brown)">สรุปคำสั่งซื้อ</h3>
+            <div class="rowline"><span class="k">รหัสอ้างอิง</span><span class="v">${REG.id}</span></div>
+            <div class="rowline"><span class="k">เวิร์กช็อป</span><span class="v">${WS.title}</span></div>
+            <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(round.date)} ${round.time}</span></div>
+            <div class="rowline"><span class="k">ผู้สมัคร</span><span class="v">${REG.name}</span></div>
+            <div class="rowline"><span class="k total">ยอดชำระ</span><span class="v total">${money(total)} บาท</span></div>
+          </aside>
+        </div>`;
+    }
+
+    async function payPromptPay() {
+      const box = document.getElementById('pay-result');
+      box.innerHTML = '<p class="muted">กำลังสร้างคิวอาร์…</p>';
+      const res = await fetch('/api/pay/promptpay', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ registrationId: REG.id }) });
+      const c = await res.json();
+      if (!res.ok) { box.innerHTML = `<div class="alert err">${c.error}</div>`; return; }
+      box.innerHTML = `
+        <div class="qrbox">
+          <p style="margin-top:0"><b>สแกนเพื่อชำระ ${money(REG.amount)} บาท</b></p>
+          <img src="${c.qrImage}" alt="PromptPay QR">
+          <p class="muted">เปิดแอปธนาคาร → สแกน QR → โอนตามยอด</p>
+        </div>
+        <div class="alert info mt">รหัสอ้างอิงของคุณคือ <b>${REG.id}</b><br>ระบบกำลังรอตรวจสอบการชำระเงินอัตโนมัติ…</div>`;
+      startPolling();
+    }
+
+    function payCardForm() {
+      const box = document.getElementById('pay-result');
+      box.innerHTML = `
+        <div class="panel" style="box-shadow:none;border-color:var(--orange)">
+          <div class="field"><label>หมายเลขบัตร</label><input id="cc-num" inputmode="numeric" placeholder="4242 4242 4242 4242"></div>
+          <div style="display:flex;gap:10px">
+            <div class="field" style="flex:1"><label>วันหมดอายุ (MM/YY)</label><input id="cc-exp" placeholder="12/28"></div>
+            <div class="field" style="width:110px"><label>CVV</label><input id="cc-cvv" inputmode="numeric" placeholder="123"></div>
+          </div>
+          <div class="field"><label>ชื่อบนบัตร</label><input id="cc-name" placeholder="SOMYING JAIDEE"></div>
+          <button class="btn btn-primary block" onclick="payCard()">จ่าย ${money(REG.amount)} บาท</button>
+          <p class="hint">🔒 ข้อมูลบัตรถูกส่งตรงไปยัง Omise อย่างปลอดภัย ไม่ถูกเก็บบนเซิร์ฟเวอร์ของเรา</p>
+        </div>`;
+    }
+
+    async function payCard() {
+      const box = document.getElementById('pay-result');
+      const [mm, yy] = (val('cc-exp')||'').split('/');
+      const submit = async (token) => {
+        box.insertAdjacentHTML('beforeend', '<p class="muted">กำลังดำเนินการชำระเงิน…</p>');
+        const res = await fetch('/api/pay/card', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ registrationId: REG.id, token }) });
+        const c = await res.json();
+        if (res.ok && (c.paid || c.status==='successful')) { successView(); }
+        else { box.innerHTML = `<div class="alert err">ชำระเงินไม่สำเร็จ: ${c.error||'กรุณาลองใหม่'}</div>`; }
+      };
+      if (CFG.paymentConfigured && window.Omise) {
+        Omise.setPublicKey(CFG.omisePublicKey);
+        Omise.createToken('card', {
+          number: (val('cc-num')||'').replace(/\s/g,''), expiration_month: mm, expiration_year: '20'+ (yy||''),
+          security_code: val('cc-cvv'), name: val('cc-name')
+        }, (status, response) => {
+          if (status === 200) submit(response.id);
+          else box.innerHTML = `<div class="alert err">บัตรไม่ถูกต้อง: ${response.message}</div>`;
+        });
+      } else {
+        submit('demo_token'); // demo mode
+      }
+    }
+
+    function startPolling() {
+      clearInterval(POLL);
+      POLL = setInterval(async () => {
+        const res = await fetch('/api/pay/status/'+REG.id);
+        const s = await res.json();
+        if (s.paid) { clearInterval(POLL); successView(); }
+      }, 4000);
+    }
+
+    function successView() {
+      clearInterval(POLL);
+      const addFriend = CFG.lineAddFriendUrl
+        ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE เพื่อรับการยืนยัน</a>`
+        : '';
+      document.getElementById('root').innerHTML = `
+        <div class="panel center" style="max-width:560px;margin:0 auto">
+          <div style="font-size:64px">✅</div>
+          <h1 style="color:var(--green)">สมัครสำเร็จแล้ว!</h1>
+          <p>ขอบคุณค่ะ ${REG.name} 🌿 เราได้รับการชำระเงินของคุณเรียบร้อยแล้ว</p>
+          <div class="alert info">รหัสอ้างอิง: <b>${REG.id}</b><br>
+            กรุณาเพิ่มเพื่อน LINE Official Account ของเรา แล้วพิมพ์รหัสอ้างอิงนี้เข้ามา
+            ผู้จัดจะส่งข้อความยืนยันรอบและรายละเอียดให้อีกครั้งค่ะ</div>
+          ${addFriend}
+          <a class="btn btn-ghost block mt" href="/">กลับหน้าแรก</a>
+        </div>`;
+    }
+
+    const val = (id) => (document.getElementById(id)?.value || '').trim();
+    const showErr = (m) => { const e = document.getElementById('err'); if (e) e.innerHTML = `<div class="alert err">${m}</div>`; };
+    boot();
+  </script>
+</body>
+</html>

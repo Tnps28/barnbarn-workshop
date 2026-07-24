@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BARNBARN Workshop — เวิร์กช็อปงานคราฟต์และธรรมชาติ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="logo">🌿</span> BARNBARN</div>
+    <a class="plain" href="/admin">สำหรับผู้จัด ▸</a>
+  </nav>
+
+  <header class="hero">
+    <span class="leaf" style="left:8%;top:20px">🍃</span>
+    <span class="leaf" style="right:10%;top:60px">🌾</span>
+    <div class="badge">เวิร์กช็อปงานคราฟต์ · ธรรมชาติ · ทำมือ</div>
+    <h1>มาลงมือทำ<br />สิ่งเล็ก ๆ ด้วยมือของคุณ</h1>
+    <p>เลือกเวิร์กช็อปที่ชอบ จองรอบที่สะดวก จ่ายออนไลน์ได้ทันที
+       แล้วรอรับข้อความยืนยันทาง LINE จากเรา ง่าย ๆ สบายใจ ✨</p>
+    <div class="badges">
+      <span class="badge">✓ จ่ายง่ายผ่านพร้อมเพย์/บัตร</span>
+      <span class="badge">✓ ยืนยันทาง LINE</span>
+      <span class="badge">✓ ที่นั่งจำกัดต่อรอบ</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h2 class="section-title">เวิร์กช็อปที่เปิดรับสมัคร</h2>
+    <div id="list" class="grid"><p class="muted">กำลังโหลด…</p></div>
+  </main>
+
+  <div class="footer">
+    🌿 BARNBARN Workshop · ติดต่อสอบถาม / แจ้งชำระเงินเพิ่มเติมได้ทาง LINE Official Account
+  </div>
+
+  <script>
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const fmtDate = (d) => {
+      if (!d) return '';
+      try {
+        return new Date(d + 'T00:00:00').toLocaleDateString('th-TH',
+          { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+      } catch { return d; }
+    };
+
+    async function load() {
+      const res = await fetch('/api/workshops');
+      const items = await res.json();
+      const el = document.getElementById('list');
+      if (!items.length) { el.innerHTML = '<p class="muted">ยังไม่มีเวิร์กช็อปเปิดรับสมัครในขณะนี้</p>'; return; }
+      el.innerHTML = items.map(cardHtml).join('');
+    }
+
+    function cardHtml(w) {
+      const minPrice = Math.min(...w.rounds.map(r => r.price));
+      const nextRounds = w.rounds
+        .filter(r => r.remaining > 0)
+        .slice(0, 2)
+        .map(r => `<div>📅 ${fmtDate(r.date)} · ${r.time} <span class="muted">(เหลือ ${r.remaining} ที่)</span></div>`)
+        .join('');
+      const soldOut = w.rounds.every(r => r.remaining <= 0);
+      return `
+        <article class="card">
+          <div class="thumb">${w.image ? `<img src="${w.image}" alt="">` : (w.emoji || '🎨')}</div>
+          <div class="body">
+            ${w.category ? `<span class="tag">${w.category}</span>` : ''}
+            <h3>${w.title}</h3>
+            ${w.subtitle ? `<div class="muted">${w.subtitle}</div>` : ''}
+            <div class="rounds">${nextRounds || '<span class="muted">รอประกาศรอบใหม่</span>'}</div>
+            <div class="price">เริ่มต้น ${money(minPrice)} บาท</div>
+            <div class="foot">
+              ${soldOut
+                ? '<button class="btn btn-ghost block" disabled>เต็มทุกรอบแล้ว</button>'
+                : `<a class="btn btn-primary block" href="/workshop?id=${w.id}">ดูรายละเอียด & สมัคร</a>`}
+            </div>
+          </div>
+        </article>`;
+    }
+    load();
+  </script>
+</body>
+</html>
