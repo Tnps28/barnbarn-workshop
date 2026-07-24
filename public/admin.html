@@ -30,6 +30,7 @@
 
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
+      <button class="btn btn-yellow" onclick="openPaymentSettings()">🏦 ตั้งค่าการชำระเงิน (QR/บัญชี)</button>
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
 
@@ -42,6 +43,7 @@
         <select id="filter-status" onchange="renderRegs()" style="max-width:240px">
           <option value="">ทุกสถานะ</option>
           <option value="pending_payment">รอชำระเงิน</option>
+          <option value="awaiting_verification">แจ้งโอนแล้ว (รอตรวจสอบ)</option>
           <option value="paid">ชำระแล้ว (รอยืนยัน)</option>
           <option value="confirmed">ยืนยันแล้ว</option>
           <option value="cancelled">ยกเลิก</option>
@@ -87,6 +89,37 @@
     </div>
   </div>
 
+  <!-- PAYMENT SETTINGS MODAL -->
+  <div class="modal-bg" id="pay-modal">
+    <div class="modal">
+      <h3>🏦 ตั้งค่าการชำระเงิน</h3>
+      <p class="muted" style="margin-top:-6px">อัปโหลด QR พร้อมเพย์/ธนาคารของคุณ ผู้สมัครจะเห็นและดาวน์โหลดไปโอนเอง แล้วแนบสลิปกลับมา</p>
+      <div class="field"><label>รูป QR พร้อมเพย์ / ธนาคาร</label>
+        <input type="file" id="pay-qr-file" accept="image/*" onchange="onQrFile(event)">
+        <div class="hint">บันทึกรูป QR จากแอปธนาคารของคุณ แล้วเลือกไฟล์นี้</div>
+      </div>
+      <div id="pay-qr-preview"></div>
+      <div class="field"><label>ธนาคาร</label><input id="pay-bank" placeholder="เช่น ธนาคารกสิกรไทย"></div>
+      <div class="field"><label>ชื่อบัญชี</label><input id="pay-accname" placeholder="เช่น น.ส. ธนพร ..."></div>
+      <div class="field"><label>เลขที่บัญชี / พร้อมเพย์</label><input id="pay-accnum" placeholder="xxx-x-xxxxx-x หรือเบอร์พร้อมเพย์"></div>
+      <div class="field"><label>หมายเหตุถึงผู้สมัคร (ไม่บังคับ)</label><textarea id="pay-note" placeholder="เช่น โอนแล้วแนบสลิปได้เลย ระบุชื่อในช่องหมายเหตุ"></textarea></div>
+      <div id="pay-save-msg"></div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
+        <button class="btn btn-primary" style="flex:1" onclick="savePaymentSettings()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIP VIEW MODAL -->
+  <div class="modal-bg" id="slip-modal">
+    <div class="modal center">
+      <h3>สลิปการโอนเงิน</h3>
+      <div id="slip-body"></div>
+      <button class="btn btn-ghost block mt" onclick="closeModal()">ปิด</button>
+    </div>
+  </div>
+
   <script>
     let PW = '';
     const H = () => ({ 'Content-Type':'application/json', 'x-admin-password': PW });
@@ -114,6 +147,7 @@
       document.getElementById('stats').innerHTML = `
         ${stat(s.totalRegistrations,'ผู้สมัครทั้งหมด')}
         ${stat(s.pendingPayment,'รอชำระเงิน')}
+        ${stat(s.awaitingVerification||0,'แจ้งโอน รอตรวจสอบ')}
         ${stat(s.paid,'ชำระแล้ว รอยืนยัน')}
         ${stat(s.confirmed,'ยืนยันแล้ว')}
         ${stat(money(s.revenue)+' ฿','ยอดรับชำระ')}`;
@@ -147,6 +181,7 @@
       const list = f ? REGS.filter(r=>r.status===f) : REGS;
       const statusPill = (s) => ({
         pending_payment:'<span class="pill pending">รอชำระ</span>',
+        awaiting_verification:'<span class="pill pending">แจ้งโอนแล้ว</span>',
         paid:'<span class="pill paid">ชำระแล้ว</span>',
         confirmed:'<span class="pill confirmed">ยืนยันแล้ว</span>',
         cancelled:'<span class="pill cancelled">ยกเลิก</span>'
@@ -156,9 +191,9 @@
           <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}</span></td>
           <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span></td>
           <td>${money(r.amount)} ฿</td>
-          <td>${statusPill(r.status)}</td>
+          <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
           <td>
-            ${r.status==='pending_payment'?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ทำเครื่องหมายชำระแล้ว</button>`:''}
+            ${(r.status==='pending_payment'||r.status==='awaiting_verification')?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ยืนยันรับเงินแล้ว</button>`:''}
             ${r.status==='paid'?`<button class="btn btn-blue btn-sm" onclick="confirmReg('${r.id}')">ส่งยืนยัน LINE</button>`:''}
             ${r.status!=='cancelled'&&r.status!=='confirmed'?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
             ${r.status==='confirmed'?'<span class="muted">✓ เสร็จสิ้น</span>':''}
@@ -168,6 +203,53 @@
 
     async function markPaid(id) { await fetch(`/api/admin/registrations/${id}/mark-paid`,{method:'POST',headers:H()}); loadAll(); }
     async function cancelReg(id) { if(!confirm('ยกเลิกใบสมัครนี้?'))return; await fetch(`/api/admin/registrations/${id}/cancel`,{method:'POST',headers:H()}); loadAll(); }
+
+    function viewSlip(id) {
+      const r = REGS.find(x=>x.id===id);
+      if (!r || !r.slipImage) return;
+      document.getElementById('slip-body').innerHTML =
+        `<p class="muted">${r.name} · ${money(r.amount)} ฿ · ${r.id}</p>
+         <img src="${r.slipImage}" style="max-width:100%;border-radius:10px;border:1px solid var(--line)">
+         <a class="btn btn-yellow btn-sm mt" href="${r.slipImage}" download="slip-${r.id}.jpg">⬇️ ดาวน์โหลดสลิป</a>`;
+      document.getElementById('slip-modal').classList.add('open');
+    }
+
+    // ----- payment settings -----
+    let QR_DATA = '';
+    async function openPaymentSettings() {
+      const s = await (await fetch('/api/admin/payment-settings', { headers: H() })).json();
+      QR_DATA = s.paymentQr || '';
+      document.getElementById('pay-bank').value = s.bankName || '';
+      document.getElementById('pay-accname').value = s.accountName || '';
+      document.getElementById('pay-accnum').value = s.accountNumber || '';
+      document.getElementById('pay-note').value = s.note || '';
+      document.getElementById('pay-save-msg').innerHTML = '';
+      document.getElementById('pay-qr-preview').innerHTML = QR_DATA
+        ? `<img src="${QR_DATA}" style="max-height:180px;border-radius:10px;border:1px solid var(--line)"><p class="hint">QR ปัจจุบัน (เลือกไฟล์ใหม่เพื่อเปลี่ยน)</p>` : '';
+      document.getElementById('pay-modal').classList.add('open');
+    }
+    function resizeImage(file, maxW=700, q=0.8) {
+      return new Promise((resolve,reject)=>{
+        const rd=new FileReader();
+        rd.onload=()=>{const im=new Image();im.onload=()=>{const sc=Math.min(1,maxW/im.width);const c=document.createElement('canvas');c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);c.getContext('2d').drawImage(im,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',q));};im.onerror=reject;im.src=rd.result;};
+        rd.onerror=reject;rd.readAsDataURL(file);
+      });
+    }
+    async function onQrFile(e){
+      const f=e.target.files[0]; if(!f) return;
+      QR_DATA = await resizeImage(f);
+      document.getElementById('pay-qr-preview').innerHTML = `<img src="${QR_DATA}" style="max-height:180px;border-radius:10px;border:1px solid var(--line)"><p class="hint">QR ใหม่ ✓</p>`;
+    }
+    async function savePaymentSettings(){
+      const body = {
+        paymentQr: QR_DATA,
+        bankName: v('pay-bank'), accountName: v('pay-accname'),
+        accountNumber: v('pay-accnum'), note: document.getElementById('pay-note').value.trim()
+      };
+      const res = await fetch('/api/admin/payment-settings',{method:'POST',headers:H(),body:JSON.stringify(body)});
+      if(res.ok){ document.getElementById('pay-save-msg').innerHTML='<div class="alert ok">บันทึกเรียบร้อย ✓</div>'; setTimeout(closeModal,900); }
+      else { document.getElementById('pay-save-msg').innerHTML='<div class="alert err">บันทึกไม่สำเร็จ</div>'; }
+    }
 
     async function confirmReg(id) {
       const res = await fetch(`/api/admin/registrations/${id}/confirm`,{method:'POST',headers:H()});

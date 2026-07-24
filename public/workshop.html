@@ -6,7 +6,6 @@
   <title>สมัครเวิร์กช็อป — BARNBARN</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
-  <script src="https://cdn.omise.co/omise.js.gz"></script>
 </head>
 <body>
   <nav class="nav">
@@ -23,7 +22,7 @@
     const wsId = qs.get('id');
     const money = (n) => Number(n).toLocaleString('th-TH');
     const fmtDate = (d) => { try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});} catch { return d; } };
-    let WS = null, CFG = null, REG = null, POLL = null;
+    let WS = null, CFG = null, REG = null, REG_ROUND = null;
 
     async function boot() {
       const [wRes, cRes] = await Promise.all([ fetch('/api/workshops/'+wsId), fetch('/api/config') ]);
@@ -66,7 +65,7 @@
           </div>
           <aside class="panel">
             <h3 style="margin-top:0;color:var(--brown)">ทำไมต้อง BARNBARN?</h3>
-            <p class="muted">🌿 วิทยากรดูแลใกล้ชิด<br>🎨 อุปกรณ์ครบ ไม่ต้องเตรียม<br>💳 จ่ายออนไลน์ปลอดภัย<br>💬 ยืนยันและสอบถามได้ทาง LINE</p>
+            <p class="muted">🌿 วิทยากรดูแลใกล้ชิด<br>🎨 อุปกรณ์ครบ ไม่ต้องเตรียม<br>🏦 โอนผ่านธนาคาร/พร้อมเพย์<br>💬 ยืนยันและสอบถามได้ทาง LINE</p>
             <div class="alert info mt">ที่นั่งมีจำนวนจำกัดต่อรอบ · ระบบจะกันที่นั่งให้เมื่อกรอกข้อมูลเสร็จ</div>
           </aside>
         </div>`;
@@ -129,9 +128,10 @@
       renderStep3(data.round);
     }
 
-    // ---------- STEP 3: ชำระเงิน ----------
-    function renderStep3(round) {
-      const total = REG.amount;
+    // ---------- STEP 3: ชำระเงิน (โอนผ่านธนาคาร + แนบสลิป) ----------
+    let SLIP = ''; // base64 data URL of uploaded slip
+    async function renderStep3(round) {
+      REG_ROUND = round;
       document.getElementById('root').innerHTML = `
         <div class="two-col">
           <div class="panel">
@@ -140,15 +140,8 @@
               <div class="step done">2 · กรอกข้อมูล</div>
               <div class="step active">3 · ชำระเงิน</div>
             </div>
-            <h2 style="color:var(--brown)">เลือกวิธีชำระเงิน</h2>
-            ${CFG.paymentConfigured ? '' : '<div class="alert warn">โหมดทดลอง (Demo): ยังไม่ได้ตั้งค่าคีย์ชำระเงินจริง — สแกน/กดแล้วผู้จัดจะเป็นผู้ยืนยันการชำระให้</div>'}
-            <div id="pay-area">
-              <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <button class="btn btn-blue" onclick="payPromptPay()">📱 พร้อมเพย์ (สแกน QR)</button>
-                <button class="btn btn-yellow" onclick="payCardForm()">💳 บัตรเครดิต/เดบิต</button>
-              </div>
-            </div>
-            <div id="pay-result" class="mt"></div>
+            <h2 style="color:var(--brown)">ชำระเงินโดยโอนผ่านธนาคาร</h2>
+            <div id="pay-area"><p class="muted">กำลังโหลดข้อมูลการชำระเงิน…</p></div>
           </div>
           <aside class="panel">
             <h3 style="margin-top:0;color:var(--brown)">สรุปคำสั่งซื้อ</h3>
@@ -156,88 +149,99 @@
             <div class="rowline"><span class="k">เวิร์กช็อป</span><span class="v">${WS.title}</span></div>
             <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(round.date)} ${round.time}</span></div>
             <div class="rowline"><span class="k">ผู้สมัคร</span><span class="v">${REG.name}</span></div>
-            <div class="rowline"><span class="k total">ยอดชำระ</span><span class="v total">${money(total)} บาท</span></div>
+            <div class="rowline"><span class="k total">ยอดที่ต้องโอน</span><span class="v total">${money(REG.amount)} บาท</span></div>
           </aside>
         </div>`;
-    }
-
-    async function payPromptPay() {
-      const box = document.getElementById('pay-result');
-      box.innerHTML = '<p class="muted">กำลังสร้างคิวอาร์…</p>';
-      const res = await fetch('/api/pay/promptpay', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ registrationId: REG.id }) });
-      const c = await res.json();
-      if (!res.ok) { box.innerHTML = `<div class="alert err">${c.error}</div>`; return; }
-      box.innerHTML = `
-        <div class="qrbox">
-          <p style="margin-top:0"><b>สแกนเพื่อชำระ ${money(REG.amount)} บาท</b></p>
-          <img src="${c.qrImage}" alt="PromptPay QR">
-          <p class="muted">เปิดแอปธนาคาร → สแกน QR → โอนตามยอด</p>
-        </div>
-        <div class="alert info mt">รหัสอ้างอิงของคุณคือ <b>${REG.id}</b><br>ระบบกำลังรอตรวจสอบการชำระเงินอัตโนมัติ…</div>`;
-      startPolling();
-    }
-
-    function payCardForm() {
-      const box = document.getElementById('pay-result');
-      box.innerHTML = `
-        <div class="panel" style="box-shadow:none;border-color:var(--orange)">
-          <div class="field"><label>หมายเลขบัตร</label><input id="cc-num" inputmode="numeric" placeholder="4242 4242 4242 4242"></div>
-          <div style="display:flex;gap:10px">
-            <div class="field" style="flex:1"><label>วันหมดอายุ (MM/YY)</label><input id="cc-exp" placeholder="12/28"></div>
-            <div class="field" style="width:110px"><label>CVV</label><input id="cc-cvv" inputmode="numeric" placeholder="123"></div>
-          </div>
-          <div class="field"><label>ชื่อบนบัตร</label><input id="cc-name" placeholder="SOMYING JAIDEE"></div>
-          <button class="btn btn-primary block" onclick="payCard()">จ่าย ${money(REG.amount)} บาท</button>
-          <p class="hint">🔒 ข้อมูลบัตรถูกส่งตรงไปยัง Omise อย่างปลอดภัย ไม่ถูกเก็บบนเซิร์ฟเวอร์ของเรา</p>
-        </div>`;
-    }
-
-    async function payCard() {
-      const box = document.getElementById('pay-result');
-      const [mm, yy] = (val('cc-exp')||'').split('/');
-      const submit = async (token) => {
-        box.insertAdjacentHTML('beforeend', '<p class="muted">กำลังดำเนินการชำระเงิน…</p>');
-        const res = await fetch('/api/pay/card', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ registrationId: REG.id, token }) });
-        const c = await res.json();
-        if (res.ok && (c.paid || c.status==='successful')) { successView(); }
-        else { box.innerHTML = `<div class="alert err">ชำระเงินไม่สำเร็จ: ${c.error||'กรุณาลองใหม่'}</div>`; }
-      };
-      if (CFG.paymentConfigured && window.Omise) {
-        Omise.setPublicKey(CFG.omisePublicKey);
-        Omise.createToken('card', {
-          number: (val('cc-num')||'').replace(/\s/g,''), expiration_month: mm, expiration_year: '20'+ (yy||''),
-          security_code: val('cc-cvv'), name: val('cc-name')
-        }, (status, response) => {
-          if (status === 200) submit(response.id);
-          else box.innerHTML = `<div class="alert err">บัตรไม่ถูกต้อง: ${response.message}</div>`;
-        });
-      } else {
-        submit('demo_token'); // demo mode
+      const info = await (await fetch('/api/payment-info')).json();
+      const area = document.getElementById('pay-area');
+      if (!info.configured) {
+        area.innerHTML = `<div class="alert warn">ผู้จัดยังไม่ได้ตั้งค่าช่องทางการชำระเงิน กรุณาติดต่อผู้จัดทาง LINE
+          เพื่อแจ้งรหัสอ้างอิง <b>${REG.id}</b> และสอบถามวิธีชำระเงินค่ะ</div>
+          ${CFG.lineAddFriendUrl ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE ผู้จัด</a>` : ''}`;
+        return;
       }
+      const acc = info.accountNumber
+        ? `<div class="rowline"><span class="k">ธนาคาร</span><span class="v">${info.bankName||'-'}</span></div>
+           <div class="rowline"><span class="k">ชื่อบัญชี</span><span class="v">${info.accountName||'-'}</span></div>
+           <div class="rowline"><span class="k">เลขบัญชี</span><span class="v">${info.accountNumber} <button class="btn btn-ghost btn-sm" onclick="copyText('${info.accountNumber}')">คัดลอก</button></span></div>`
+        : '';
+      area.innerHTML = `
+        <div class="alert info">โอนตามยอด <b>${money(REG.amount)} บาท</b> แล้วแนบสลิปด้านล่าง ผู้จัดจะตรวจสอบและยืนยันให้ค่ะ</div>
+        ${info.paymentQr ? `<div class="qrbox">
+            <p style="margin-top:0"><b>สแกน / บันทึก QR เพื่อโอนเงิน</b></p>
+            <img src="${info.paymentQr}" alt="QR ชำระเงิน" id="payqr">
+            <div class="mt"><a class="btn btn-yellow btn-sm" href="${info.paymentQr}" download="barnbarn-payment-qr.png">⬇️ ดาวน์โหลด QR</a></div>
+          </div>` : ''}
+        ${acc ? `<div class="panel mt" style="box-shadow:none">${acc}</div>` : ''}
+        ${info.note ? `<p class="hint">${info.note.replace(/\n/g,'<br>')}</p>` : ''}
+        <hr style="border:none;border-top:1px dashed var(--line);margin:18px 0">
+        <h3 style="color:var(--brown)">แนบสลิปการโอนเงิน</h3>
+        <div class="field">
+          <input type="file" id="slip" accept="image/*" onchange="onSlip(event)">
+          <div class="hint">ถ่ายรูปหรือแคปหน้าจอสลิปโอนเงิน แล้วเลือกไฟล์</div>
+        </div>
+        <div id="slip-preview"></div>
+        <div id="notify-err"></div>
+        <button class="btn btn-primary block mt" id="notify-btn" onclick="notifyPaid()">✅ แจ้งชำระเงินแล้ว</button>`;
     }
 
-    function startPolling() {
-      clearInterval(POLL);
-      POLL = setInterval(async () => {
-        const res = await fetch('/api/pay/status/'+REG.id);
-        const s = await res.json();
-        if (s.paid) { clearInterval(POLL); successView(); }
-      }, 4000);
+    // resize + read an image file to a compact base64 data URL
+    function fileToResizedDataURL(file, maxW = 900, quality = 0.7) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxW / img.width);
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.width * scale);
+            c.height = Math.round(img.height * scale);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+          img.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function onSlip(e) {
+      const f = e.target.files[0];
+      if (!f) return;
+      SLIP = await fileToResizedDataURL(f);
+      document.getElementById('slip-preview').innerHTML =
+        `<img src="${SLIP}" style="max-height:200px;border-radius:10px;border:1px solid var(--line)"><p class="hint">แนบสลิปเรียบร้อย ✓</p>`;
+    }
+
+    function copyText(t) { navigator.clipboard?.writeText(t); }
+
+    async function notifyPaid() {
+      if (!SLIP) { document.getElementById('notify-err').innerHTML = '<div class="alert err">กรุณาแนบสลิปการโอนเงินก่อนค่ะ</div>'; return; }
+      const btn = document.getElementById('notify-btn');
+      btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+      const res = await fetch(`/api/register/${REG.id}/notify-paid`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slipImage: SLIP })
+      });
+      if (!res.ok) { btn.disabled = false; btn.textContent = '✅ แจ้งชำระเงินแล้ว';
+        document.getElementById('notify-err').innerHTML = '<div class="alert err">เกิดข้อผิดพลาด กรุณาลองใหม่</div>'; return; }
+      successView();
     }
 
     function successView() {
-      clearInterval(POLL);
       const addFriend = CFG.lineAddFriendUrl
         ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE เพื่อรับการยืนยัน</a>`
         : '';
       document.getElementById('root').innerHTML = `
         <div class="panel center" style="max-width:560px;margin:0 auto">
-          <div style="font-size:64px">✅</div>
-          <h1 style="color:var(--green)">สมัครสำเร็จแล้ว!</h1>
-          <p>ขอบคุณค่ะ ${REG.name} 🌿 เราได้รับการชำระเงินของคุณเรียบร้อยแล้ว</p>
+          <div style="font-size:64px">📩</div>
+          <h1 style="color:var(--green)">แจ้งชำระเงินเรียบร้อย!</h1>
+          <p>ขอบคุณค่ะ ${REG.name} 🌿 เราได้รับสลิปของคุณแล้ว</p>
           <div class="alert info">รหัสอ้างอิง: <b>${REG.id}</b><br>
-            กรุณาเพิ่มเพื่อน LINE Official Account ของเรา แล้วพิมพ์รหัสอ้างอิงนี้เข้ามา
-            ผู้จัดจะส่งข้อความยืนยันรอบและรายละเอียดให้อีกครั้งค่ะ</div>
+            ผู้จัดกำลังตรวจสอบการชำระเงิน และจะส่งข้อความยืนยันที่นั่งให้คุณเร็ว ๆ นี้ค่ะ
+            ${CFG.lineAddFriendUrl ? 'กรุณาเพิ่มเพื่อน LINE เพื่อรับการยืนยัน' : ''}</div>
           ${addFriend}
           <a class="btn btn-ghost block mt" href="/">กลับหน้าแรก</a>
         </div>`;
