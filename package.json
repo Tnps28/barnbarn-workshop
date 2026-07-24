@@ -1,0 +1,17 @@
+{
+  "name": "barnbarn-workshop",
+  "version": "1.0.0",
+  "description": "ระบบจัดการเวิร์กช็อป BARNBARN — เปิดรับสมัคร ชำระเงินออนไลน์ และยืนยันผ่าน LINE Official Account",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

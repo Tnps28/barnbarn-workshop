@@ -1,0 +1,271 @@
+// server.js — BARNBARN Workshop backend
+// Express server: public API, admin API, payment (Omise) and LINE OA confirmation.
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+import * as db from './db.js';
+import {
+  createPromptPayCharge,
+  createCardCharge,
+  getChargeStatus,
+  paymentConfigured
+} from './services/payment.js';
+import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
+
+// --- load .env (tiny parser, no dependency) ---
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+(function loadEnv() {
+  const p = path.join(__dirname, '.env');
+  if (fs.existsSync(p)) {
+    for (const line of fs.readFileSync(p, 'utf-8').split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+    }
+  }
+})();
+
+const PORT = process.env.PORT || 3000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'barnbarn2026';
+const LINE_ADD_FRIEND_URL = process.env.LINE_ADD_FRIEND_URL || '';
+const OMISE_PUBLIC_KEY = process.env.OMISE_PUBLIC_KEY || '';
+
+const app = express();
+app.use(express.json({ limit: '2mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ---------- helpers ----------
+function requireAdmin(req, res, next) {
+  const pass = req.get('x-admin-password') || req.query.pw;
+  if (pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+  next();
+}
+
+function roundOf(ws, roundId) {
+  return ws && ws.rounds.find((r) => r.id === roundId);
+}
+
+function publicWorkshop(ws) {
+  // attach seats remaining per round
+  return {
+    ...ws,
+    rounds: ws.rounds.map((r) => ({
+      ...r,
+      taken: db.seatsTaken(ws.id, r.id),
+      remaining: Math.max(0, r.seats - db.seatsTaken(ws.id, r.id))
+    }))
+  };
+}
+
+// ---------- public config ----------
+app.get('/api/config', (req, res) => {
+  res.json({
+    paymentConfigured: paymentConfigured(),
+    lineConfigured: lineConfigured(),
+    omisePublicKey: OMISE_PUBLIC_KEY,
+    lineAddFriendUrl: LINE_ADD_FRIEND_URL
+  });
+});
+
+// ---------- public: workshops ----------
+app.get('/api/workshops', (req, res) => {
+  res.json(db.listWorkshops({ onlyActive: true }).map(publicWorkshop));
+});
+
+app.get('/api/workshops/:id', (req, res) => {
+  const ws = db.getWorkshop(req.params.id);
+  if (!ws || !ws.active) return res.status(404).json({ error: 'not found' });
+  res.json(publicWorkshop(ws));
+});
+
+// ---------- public: register ----------
+app.post('/api/register', (req, res) => {
+  const { workshopId, roundId, name, phone } = req.body || {};
+  if (!workshopId || !roundId || !name || !phone) {
+    return res.status(400).json({ error: 'กรุณากรอกชื่อ เบอร์โทร และเลือกรอบให้ครบถ้วน' });
+  }
+  const ws = db.getWorkshop(workshopId);
+  const round = roundOf(ws, roundId);
+  if (!ws || !round) return res.status(404).json({ error: 'ไม่พบเวิร์กช็อปหรือรอบที่เลือก' });
+
+  const people = Number(req.body.people) || 1;
+  const remaining = round.seats - db.seatsTaken(workshopId, roundId);
+  if (people > remaining) {
+    return res.status(400).json({ error: `ที่นั่งเหลือ ${remaining} ที่ ไม่พอสำหรับ ${people} ท่าน` });
+  }
+
+  const reg = db.createRegistration({
+    workshopId,
+    roundId,
+    name,
+    phone,
+    email: req.body.email,
+    lineId: req.body.lineId,
+    people,
+    note: req.body.note,
+    amount: round.price * people
+  });
+  res.json({ registration: reg, workshop: { title: ws.title, location: ws.location }, round });
+});
+
+// ---------- public: pay ----------
+app.post('/api/pay/promptpay', async (req, res) => {
+  const reg = db.getRegistration(req.body.registrationId);
+  if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัคร' });
+  try {
+    const charge = await createPromptPayCharge({
+      amount: reg.amount,
+      registrationId: reg.id,
+      description: 'BARNBARN Workshop ' + reg.id
+    });
+    db.updateRegistration(reg.id, { paymentMethod: 'promptpay', paymentRef: charge.id });
+    res.json(charge);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/pay/card', async (req, res) => {
+  const reg = db.getRegistration(req.body.registrationId);
+  if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัคร' });
+  try {
+    const charge = await createCardCharge({
+      amount: reg.amount,
+      token: req.body.token,
+      registrationId: reg.id,
+      description: 'BARNBARN Workshop ' + reg.id
+    });
+    const patch = { paymentMethod: 'card', paymentRef: charge.id };
+    if (charge.paid || charge.status === 'successful') patch.status = 'paid';
+    db.updateRegistration(reg.id, patch);
+    res.json(charge);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// poll payment status; if paid, mark registration paid
+app.get('/api/pay/status/:registrationId', async (req, res) => {
+  const reg = db.getRegistration(req.params.registrationId);
+  if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัคร' });
+  if (reg.status === 'paid' || reg.status === 'confirmed') {
+    return res.json({ status: reg.status, paid: true });
+  }
+  if (!reg.paymentRef) return res.json({ status: reg.status, paid: false });
+  const charge = await getChargeStatus(reg.paymentRef);
+  if (charge.paid) db.updateRegistration(reg.id, { status: 'paid' });
+  res.json({ status: charge.paid ? 'paid' : reg.status, paid: !!charge.paid });
+});
+
+// ---------- admin: auth check ----------
+app.post('/api/admin/login', (req, res) => {
+  if ((req.body || {}).password === ADMIN_PASSWORD) return res.json({ ok: true });
+  res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
+});
+
+// ---------- admin: workshops CRUD ----------
+app.get('/api/admin/workshops', requireAdmin, (req, res) => {
+  res.json(db.listWorkshops().map(publicWorkshop));
+});
+app.post('/api/admin/workshops', requireAdmin, (req, res) => {
+  res.json(db.createWorkshop(req.body || {}));
+});
+app.put('/api/admin/workshops/:id', requireAdmin, (req, res) => {
+  const ws = db.updateWorkshop(req.params.id, req.body || {});
+  if (!ws) return res.status(404).json({ error: 'not found' });
+  res.json(ws);
+});
+app.delete('/api/admin/workshops/:id', requireAdmin, (req, res) => {
+  db.deleteWorkshop(req.params.id);
+  res.json({ ok: true });
+});
+
+// ---------- admin: registrations ----------
+app.get('/api/admin/registrations', requireAdmin, (req, res) => {
+  const regs = db.listRegistrations({ workshopId: req.query.workshopId, status: req.query.status });
+  const enriched = regs.map((r) => {
+    const ws = db.getWorkshop(r.workshopId);
+    const round = roundOf(ws, r.roundId);
+    return { ...r, workshopTitle: ws ? ws.title : '(ลบแล้ว)', round };
+  });
+  res.json(enriched);
+});
+
+// admin marks a registration as paid manually (e.g. bank transfer verified)
+app.post('/api/admin/registrations/:id/mark-paid', requireAdmin, (req, res) => {
+  const reg = db.updateRegistration(req.params.id, { status: 'paid' });
+  if (!reg) return res.status(404).json({ error: 'not found' });
+  res.json(reg);
+});
+
+app.post('/api/admin/registrations/:id/cancel', requireAdmin, (req, res) => {
+  const reg = db.updateRegistration(req.params.id, { status: 'cancelled' });
+  if (!reg) return res.status(404).json({ error: 'not found' });
+  res.json(reg);
+});
+
+// admin sends LINE confirmation (or gets the message to send manually)
+app.post('/api/admin/registrations/:id/confirm', requireAdmin, async (req, res) => {
+  const reg = db.getRegistration(req.params.id);
+  if (!reg) return res.status(404).json({ error: 'not found' });
+  const ws = db.getWorkshop(reg.workshopId);
+  const round = roundOf(ws, reg.roundId);
+  const message = buildConfirmationMessage(reg, ws, round);
+
+  const result = await pushMessage(reg.lineUserId || reg.lineId, message);
+  db.updateRegistration(reg.id, {
+    status: 'confirmed',
+    confirmed: true,
+    confirmationMessage: message,
+    confirmationSentAt: new Date().toISOString(),
+    confirmationChannel: result.sent ? 'line_auto' : 'manual'
+  });
+  res.json({ sent: result.sent, demo: result.demo, message, error: result.error });
+});
+
+// ---------- LINE webhook (captures userId when a participant messages your OA) ----------
+app.post('/api/line/webhook', (req, res) => {
+  try {
+    const events = (req.body && req.body.events) || [];
+    for (const ev of events) {
+      const userId = ev.source && ev.source.userId;
+      // Match by LINE display text "REG:<id>" if the user sends their ref code
+      const text = ev.message && ev.message.text;
+      if (userId && text) {
+        const m = text.match(/reg_[a-z0-9]+/i);
+        if (m) db.updateRegistration(m[0], { lineUserId: userId });
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
+  res.json({ ok: true });
+});
+
+// admin dashboard summary
+app.get('/api/admin/summary', requireAdmin, (req, res) => {
+  const regs = db.listRegistrations();
+  res.json({
+    workshops: db.listWorkshops().length,
+    totalRegistrations: regs.length,
+    pendingPayment: regs.filter((r) => r.status === 'pending_payment').length,
+    paid: regs.filter((r) => r.status === 'paid').length,
+    confirmed: regs.filter((r) => r.status === 'confirmed').length,
+    revenue: regs
+      .filter((r) => r.status === 'paid' || r.status === 'confirmed')
+      .reduce((s, r) => s + Number(r.amount || 0), 0)
+  });
+});
+
+// SPA-ish routes
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/workshop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'workshop.html')));
+
+app.listen(PORT, () => {
+  console.log(`\n🌿 BARNBARN Workshop running:`);
+  console.log(`   หน้าผู้สมัคร (public):  http://localhost:${PORT}`);
+  console.log(`   หน้าผู้ดูแล (admin):    http://localhost:${PORT}/admin`);
+  console.log(`   Payment gateway: ${paymentConfigured() ? 'Omise ✓' : 'DEMO mode (no keys)'}`);
+  console.log(`   LINE OA push:    ${lineConfigured() ? 'ready ✓' : 'manual mode (no token)'}\n`);
+});
