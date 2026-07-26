@@ -116,6 +116,8 @@ app.post('/api/register', (req, res) => {
     email: req.body.email,
     lineId: req.body.lineId,
     people,
+    allergy: req.body.allergy,
+    medical: req.body.medical,
     note: req.body.note,
     amount: round.price * people
   });

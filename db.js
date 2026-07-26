@@ -198,6 +198,8 @@ export function createRegistration(payload) {
     email: payload.email || '',
     lineId: payload.lineId || '',
     people: Number(payload.people) || 1,
+    allergy: payload.allergy || '',
+    medical: payload.medical || '',
     note: payload.note || '',
     amount: Number(payload.amount) || 0,
     // pending_payment -> awaiting_verification -> paid -> confirmed  (or cancelled)
