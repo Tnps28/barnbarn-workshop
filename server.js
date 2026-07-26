@@ -108,6 +108,11 @@ app.post('/api/register', (req, res) => {
     return res.status(400).json({ error: `ที่นั่งเหลือ ${remaining} ที่ ไม่พอสำหรับ ${people} ท่าน` });
   }
 
+  // validate selected add-ons against the workshop's defined add-ons (prevent tampering)
+  const addonIds = Array.isArray(req.body.addonIds) ? req.body.addonIds : [];
+  const selectedAddons = (ws.addons || []).filter((a) => addonIds.includes(a.id));
+  const addonsTotal = selectedAddons.reduce((s, a) => s + (Number(a.price) || 0), 0);
+
   const reg = db.createRegistration({
     workshopId,
     roundId,
@@ -118,8 +123,9 @@ app.post('/api/register', (req, res) => {
     people,
     allergy: req.body.allergy,
     medical: req.body.medical,
+    addons: selectedAddons.map((a) => ({ name: a.name, price: a.price })),
     note: req.body.note,
-    amount: round.price * people
+    amount: round.price * people + addonsTotal
   });
   res.json({ registration: reg, workshop: { title: ws.title, location: ws.location }, round });
 });
@@ -308,10 +314,13 @@ app.get('/api/admin/summary', requireAdmin, (req, res) => {
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/workshop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'workshop.html')));
 
-app.listen(PORT, () => {
-  console.log(`\n🌿 BARNBARN Workshop running:`);
-  console.log(`   หน้าผู้สมัคร (public):  http://localhost:${PORT}`);
-  console.log(`   หน้าผู้ดูแล (admin):    http://localhost:${PORT}/admin`);
-  console.log(`   Payment gateway: ${paymentConfigured() ? 'Omise ✓' : 'DEMO mode (no keys)'}`);
-  console.log(`   LINE OA push:    ${lineConfigured() ? 'ready ✓' : 'manual mode (no token)'}\n`);
-});
+db.init()
+  .catch((e) => console.error('DB init error:', e.message))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🌿 BARNBARN Workshop running:`);
+      console.log(`   หน้าผู้สมัคร (public):  http://localhost:${PORT}`);
+      console.log(`   หน้าผู้ดูแล (admin):    http://localhost:${PORT}/admin`);
+      console.log(`   LINE OA push:    ${lineConfigured() ? 'ready ✓' : 'manual mode (no token)'}`);
+    });
+  });

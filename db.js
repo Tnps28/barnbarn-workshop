@@ -1,5 +1,8 @@
-// db.js — ที่เก็บข้อมูลแบบไฟล์ JSON (ไม่ต้องติดตั้งฐานข้อมูลแยก)
-// Simple file-based JSON store. No external database server needed.
+// db.js — ที่เก็บข้อมูล
+// ใช้ MongoDB Atlas (ถาวร) ถ้าตั้งค่า MONGODB_URI ไว้ ไม่งั้น fallback เป็นไฟล์ JSON
+// Uses MongoDB Atlas when MONGODB_URI is set (data persists across deploys),
+// otherwise falls back to a local JSON file. Keeps a synchronous interface via an
+// in-memory cache with write-through to the backend.
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,74 +10,155 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const MONGODB_URI = process.env.MONGODB_URI || '';
 
-function ensure() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DB_FILE)) {
-    const seed = {
-      workshops: [
-        {
-          id: 'ws_soap01',
-          title: 'เวิร์กช็อปทำสบู่ธรรมชาติ',
-          subtitle: 'Natural Soap Making',
-          category: 'งานคราฟต์ / Craft',
-          description:
-            'เรียนรู้การทำสบู่จากวัตถุดิบธรรมชาติแบบ Cold Process ตั้งแต่การเลือกน้ำมัน การผสมสี กลิ่นหอมจากสมุนไพร ไปจนถึงการตัดและแพ็กสบู่สวย ๆ กลับบ้าน เหมาะสำหรับผู้เริ่มต้น ไม่ต้องมีพื้นฐาน',
-          location: 'BARNBARN Studio ซอยอารีย์ กรุงเทพฯ',
-          image: '',
-          rounds: [
-            { id: 'r1', date: '2026-08-16', time: '13:00–16:00', seats: 12, price: 1200 },
-            { id: 'r2', date: '2026-08-30', time: '13:00–16:00', seats: 12, price: 1200 }
-          ],
-          active: true,
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'ws_pottery01',
-          title: 'เวิร์กช็อปปั้นเซรามิกมือ',
-          subtitle: 'Hand-building Pottery',
-          category: 'งานคราฟต์ / Craft',
-          description:
-            'สัมผัสความสงบของการปั้นดินด้วยมือ ทำแก้วหรือชามใบเล็กในสไตล์ของคุณเอง วิทยากรดูแลใกล้ชิด รวมค่าดินและเผาชิ้นงาน (รับกลับได้ภายหลัง)',
-          location: 'BARNBARN Studio ซอยอารีย์ กรุงเทพฯ',
-          image: '',
-          rounds: [
-            { id: 'r1', date: '2026-09-06', time: '10:00–13:00', seats: 8, price: 1500 }
-          ],
-          active: true,
-          createdAt: new Date().toISOString()
-        }
-      ],
-      registrations: [],
-      settings: {
-        paymentQr: '', // base64 data URL of the bank/PromptPay QR image
-        bankName: '',
-        accountName: '',
-        accountNumber: '',
-        note: '',
-        updatedAt: null
-      }
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2));
-  }
-}
+let DB = null; // in-memory { workshops, registrations, settings }
+let mongo = null; // { client, wk, rg, st }
 
-function read() {
-  ensure();
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-}
-
-function write(data) {
-  ensure();
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-}
-
-// simple id generator
 export function uid(prefix = 'id') {
   return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-// ---------- Settings (payment/bank QR) ----------
+function seed() {
+  return {
+    workshops: [
+      {
+        id: 'ws_soap01',
+        title: 'เวิร์กช็อปทำสบู่ธรรมชาติ',
+        subtitle: 'Natural Soap Making',
+        category: 'งานคราฟต์ / Craft',
+        description:
+          'เรียนรู้การทำสบู่จากวัตถุดิบธรรมชาติแบบ Cold Process ตั้งแต่การเลือกน้ำมัน การผสมสี กลิ่นหอมจากสมุนไพร ไปจนถึงการตัดและแพ็กสบู่สวย ๆ กลับบ้าน เหมาะสำหรับผู้เริ่มต้น ไม่ต้องมีพื้นฐาน',
+        location: 'BARNBARN Studio ซอยอารีย์ กรุงเทพฯ',
+        image: '',
+        rounds: [
+          { id: 'r1', date: '2026-08-16', time: '13:00–16:00', seats: 12, price: 1200 },
+          { id: 'r2', date: '2026-08-30', time: '13:00–16:00', seats: 12, price: 1200 }
+        ],
+        addons: [],
+        active: true,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'ws_pottery01',
+        title: 'เวิร์กช็อปปั้นเซรามิกมือ',
+        subtitle: 'Hand-building Pottery',
+        category: 'งานคราฟต์ / Craft',
+        description:
+          'สัมผัสความสงบของการปั้นดินด้วยมือ ทำแก้วหรือชามใบเล็กในสไตล์ของคุณเอง วิทยากรดูแลใกล้ชิด รวมค่าดินและเผาชิ้นงาน (รับกลับได้ภายหลัง)',
+        location: 'BARNBARN Studio ซอยอารีย์ กรุงเทพฯ',
+        image: '',
+        rounds: [{ id: 'r1', date: '2026-09-06', time: '10:00–13:00', seats: 8, price: 1500 }],
+        addons: [],
+        active: true,
+        createdAt: new Date().toISOString()
+      }
+    ],
+    registrations: [],
+    settings: {
+      paymentQr: '',
+      bankName: '',
+      accountName: '',
+      accountNumber: '',
+      note: '',
+      updatedAt: null
+    }
+  };
+}
+
+// ---------- file backend ----------
+function ensureDir() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+function loadFromFile() {
+  ensureDir();
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+    } catch {
+      /* corrupt -> reseed */
+    }
+  }
+  const s = seed();
+  fs.writeFileSync(DB_FILE, JSON.stringify(s, null, 2));
+  return s;
+}
+function saveToFile(data) {
+  ensureDir();
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
+
+// ---------- mongo backend ----------
+const stripId = (doc) => {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc;
+  return rest;
+};
+async function initMongo() {
+  const { MongoClient } = await import('mongodb');
+  const client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
+  await client.connect();
+  const database = client.db('barnbarn');
+  mongo = {
+    client,
+    wk: database.collection('workshops'),
+    rg: database.collection('registrations'),
+    st: database.collection('settings')
+  };
+  const workshops = await mongo.wk.find({}).toArray();
+  const registrations = await mongo.rg.find({}).toArray();
+  const settingsDoc = await mongo.st.findOne({ _id: 'main' });
+  if (!workshops.length && !settingsDoc) {
+    DB = seed();
+    await persistMongo(DB); // first-run seed
+  } else {
+    DB = {
+      workshops: workshops.map(stripId),
+      registrations: registrations.map(stripId),
+      settings: settingsDoc ? stripId(settingsDoc) : seed().settings
+    };
+  }
+}
+async function persistMongo(data) {
+  await mongo.wk.deleteMany({});
+  if (data.workshops.length)
+    await mongo.wk.insertMany(data.workshops.map((w) => ({ _id: w.id, ...w })));
+  await mongo.rg.deleteMany({});
+  if (data.registrations.length)
+    await mongo.rg.insertMany(data.registrations.map((r) => ({ _id: r.id, ...r })));
+  await mongo.st.replaceOne({ _id: 'main' }, { _id: 'main', ...data.settings }, { upsert: true });
+}
+
+// ---------- init (called once at startup) ----------
+export async function init() {
+  if (MONGODB_URI) {
+    try {
+      await initMongo();
+      console.log('   Data store:      MongoDB Atlas ✓ (ข้อมูลถาวร)');
+      return;
+    } catch (e) {
+      console.error('   MongoDB connect failed, using local file:', e.message);
+    }
+  }
+  DB = loadFromFile();
+  console.log(
+    '   Data store:      local file (data/db.json) — ' +
+      (MONGODB_URI ? 'Mongo ล้มเหลว' : 'ยังไม่ตั้งค่า MONGODB_URI, ข้อมูลจะรีเซ็ตเมื่ออัปเดต')
+  );
+}
+
+// ---------- core read/write (sync interface) ----------
+function read() {
+  if (!DB) DB = loadFromFile();
+  return DB;
+}
+function write(data) {
+  DB = data;
+  if (mongo) persistMongo(data).catch((e) => console.error('Mongo save error:', e.message));
+  else saveToFile(data);
+}
+
+// ---------- Settings ----------
 export function getSettings() {
   const db = read();
   return (
@@ -88,7 +172,6 @@ export function getSettings() {
     }
   );
 }
-
 export function saveSettings(patch) {
   const db = read();
   db.settings = Object.assign(getSettings(), patch, { updatedAt: new Date().toISOString() });
@@ -97,17 +180,30 @@ export function saveSettings(patch) {
 }
 
 // ---------- Workshops ----------
+function normalizeRounds(rounds) {
+  return (rounds || []).map((r) => ({
+    id: r.id || uid('r'),
+    date: r.date || '',
+    time: r.time || '',
+    seats: Number(r.seats) || 0,
+    price: Number(r.price) || 0
+  }));
+}
+function normalizeAddons(addons) {
+  return (addons || [])
+    .filter((a) => (a.name || '').trim())
+    .map((a) => ({ id: a.id || uid('ad'), name: a.name.trim(), price: Number(a.price) || 0 }));
+}
+
 export function listWorkshops({ onlyActive = false } = {}) {
   const db = read();
   let list = db.workshops;
   if (onlyActive) list = list.filter((w) => w.active);
   return list;
 }
-
 export function getWorkshop(id) {
   return read().workshops.find((w) => w.id === id) || null;
 }
-
 export function createWorkshop(payload) {
   const db = read();
   const ws = {
@@ -118,13 +214,8 @@ export function createWorkshop(payload) {
     description: payload.description || '',
     location: payload.location || '',
     image: payload.image || '',
-    rounds: (payload.rounds || []).map((r) => ({
-      id: r.id || uid('r'),
-      date: r.date || '',
-      time: r.time || '',
-      seats: Number(r.seats) || 0,
-      price: Number(r.price) || 0
-    })),
+    rounds: normalizeRounds(payload.rounds),
+    addons: normalizeAddons(payload.addons),
     active: payload.active !== false,
     createdAt: new Date().toISOString()
   };
@@ -132,7 +223,6 @@ export function createWorkshop(payload) {
   write(db);
   return ws;
 }
-
 export function updateWorkshop(id, payload) {
   const db = read();
   const ws = db.workshops.find((w) => w.id === id);
@@ -146,19 +236,11 @@ export function updateWorkshop(id, payload) {
     image: payload.image ?? ws.image,
     active: payload.active ?? ws.active
   });
-  if (Array.isArray(payload.rounds)) {
-    ws.rounds = payload.rounds.map((r) => ({
-      id: r.id || uid('r'),
-      date: r.date || '',
-      time: r.time || '',
-      seats: Number(r.seats) || 0,
-      price: Number(r.price) || 0
-    }));
-  }
+  if (Array.isArray(payload.rounds)) ws.rounds = normalizeRounds(payload.rounds);
+  if (Array.isArray(payload.addons)) ws.addons = normalizeAddons(payload.addons);
   write(db);
   return ws;
 }
-
 export function deleteWorkshop(id) {
   const db = read();
   db.workshops = db.workshops.filter((w) => w.id !== id);
@@ -167,26 +249,21 @@ export function deleteWorkshop(id) {
 }
 
 // ---------- Registrations ----------
-// count seats already taken for a round (sums the number of people per registration,
-// excluding cancelled registrations)
 export function seatsTaken(workshopId, roundId) {
   const db = read();
   return db.registrations
     .filter((r) => r.workshopId === workshopId && r.roundId === roundId && r.status !== 'cancelled')
     .reduce((sum, r) => sum + (Number(r.people) || 1), 0);
 }
-
 export function listRegistrations(filter = {}) {
   let list = read().registrations;
   if (filter.workshopId) list = list.filter((r) => r.workshopId === filter.workshopId);
   if (filter.status) list = list.filter((r) => r.status === filter.status);
-  return list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return list.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
-
 export function getRegistration(id) {
   return read().registrations.find((r) => r.id === id) || null;
 }
-
 export function createRegistration(payload) {
   const db = read();
   const reg = {
@@ -200,13 +277,13 @@ export function createRegistration(payload) {
     people: Number(payload.people) || 1,
     allergy: payload.allergy || '',
     medical: payload.medical || '',
+    addons: Array.isArray(payload.addons) ? payload.addons : [],
     note: payload.note || '',
     amount: Number(payload.amount) || 0,
-    // pending_payment -> awaiting_verification -> paid -> confirmed  (or cancelled)
     status: 'pending_payment',
     paymentMethod: 'bank_transfer',
     paymentRef: '',
-    slipImage: '', // base64 data URL of the payment slip the participant uploads
+    slipImage: '',
     paidNote: '',
     notifiedAt: null,
     confirmed: false,
@@ -217,7 +294,6 @@ export function createRegistration(payload) {
   write(db);
   return reg;
 }
-
 export function updateRegistration(id, patch) {
   const db = read();
   const reg = db.registrations.find((r) => r.id === id);
