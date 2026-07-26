@@ -31,6 +31,7 @@
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
       <button class="btn btn-yellow" onclick="openPaymentSettings()">🏦 ตั้งค่าการชำระเงิน (QR/บัญชี)</button>
+      <button class="btn btn-blue" onclick="exportExcel()">⬇️ ดาวน์โหลด Excel</button>
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
 
@@ -204,6 +205,50 @@
             ${r.status==='confirmed'?'<span class="muted">✓ เสร็จสิ้น</span>':''}
           </td>
         </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:20px">ยังไม่มีผู้สมัคร</td></tr>';
+    }
+
+    function exportExcel() {
+      if (!REGS.length) { alert('ยังไม่มีข้อมูลผู้สมัครให้ดาวน์โหลด'); return; }
+      const statusTxt = {
+        pending_payment:'รอชำระเงิน', awaiting_verification:'แจ้งโอนแล้ว-รอตรวจสอบ',
+        paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก'
+      };
+      const esc = (v) => `"${String(v==null?'':v).replace(/"/g,'""')}"`;
+      const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
+      const rows = REGS.map(r => [
+        r.createdAt ? new Date(r.createdAt).toLocaleString('th-TH') : '',
+        r.name, r.phone, r.lineId||'', r.email||'',
+        r.workshopTitle,
+        r.round ? (fmtDate(r.round.date)+' '+r.round.time) : '',
+        r.people,
+        (r.addons||[]).map(a=>a.name+' (+'+a.price+')').join(' | '),
+        r.allergy||'', r.medical||'',
+        r.amount,
+        statusTxt[r.status]||r.status,
+        r.id
+      ].map(esc).join(','));
+      // summary block at top
+      const s = {
+        total: REGS.length,
+        confirmed: REGS.filter(r=>r.status==='confirmed').length,
+        paid: REGS.filter(r=>r.status==='paid').length,
+        revenue: REGS.filter(r=>r.status==='paid'||r.status==='confirmed').reduce((a,r)=>a+Number(r.amount||0),0)
+      };
+      const summary = [
+        ['สรุป BARNBARN Workshop','ณ วันที่',new Date().toLocaleString('th-TH')].map(esc).join(','),
+        ['ผู้สมัครทั้งหมด', s.total].map(esc).join(','),
+        ['ยืนยันแล้ว', s.confirmed].map(esc).join(','),
+        ['ชำระแล้ว-รอยืนยัน', s.paid].map(esc).join(','),
+        ['ยอดรับชำระรวม(บาท)', s.revenue].map(esc).join(','),
+        ''
+      ];
+      const csv = '﻿' + summary.join('\n') + '\n' + headers.map(esc).join(',') + '\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'barnbarn-registrations-' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
     }
 
     async function markPaid(id) { await fetch(`/api/admin/registrations/${id}/mark-paid`,{method:'POST',headers:H()}); loadAll(); }
