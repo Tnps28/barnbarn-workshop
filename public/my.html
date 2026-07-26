@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ดูการสมัครของฉัน — BARNBARN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><a href="/" style="color:inherit;display:flex;gap:10px;align-items:center"><span class="logo">🌿</span> BARNBARN</a></div>
+    <a class="plain" href="/">◂ กลับหน้าแรก</a>
+  </nav>
+
+  <main class="wrap" style="max-width:720px">
+    <h1 style="color:var(--brown);text-align:center">ดูการสมัครของฉัน</h1>
+    <p class="muted" style="text-align:center">กรอกเบอร์โทรที่ใช้สมัคร เพื่อดูรายการเวิร์กช็อปและสถานะทั้งหมดของคุณ</p>
+
+    <div class="panel" style="max-width:460px;margin:18px auto">
+      <div class="field">
+        <label>เบอร์โทรศัพท์</label>
+        <input id="phone" inputmode="tel" placeholder="08x-xxx-xxxx" onkeydown="if(event.key==='Enter')lookup()">
+      </div>
+      <div id="err"></div>
+      <button class="btn btn-primary block" onclick="lookup()">🔍 ดูการสมัครของฉัน</button>
+    </div>
+
+    <div id="results"></div>
+  </main>
+
+  <div class="footer">
+    <div class="fline">🌿 BARNBARN Workshop</div>
+    <a class="line-btn" href="https://lin.ee/TjK2193" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.5c-5.24 0-9.5 3.44-9.5 7.68 0 3.8 3.38 6.98 7.94 7.58.31.06.73.2.84.46.1.24.06.6.03.84l-.13.82c-.04.24-.19.95.83.52 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.52 2.04-3.07 2.04-4.79C21.5 6.94 17.24 3.5 12 3.5z"/></svg>
+      เพิ่มเพื่อน LINE Official
+    </a>
+  </div>
+
+  <script>
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const fmtDate = (d) => { if(!d) return ''; try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});} catch { return d; } };
+    const statusPill = (s) => ({
+      pending_payment: '<span class="pill pending">รอชำระเงิน</span>',
+      awaiting_verification: '<span class="pill pending">แจ้งโอนแล้ว · รอตรวจสอบ</span>',
+      paid: '<span class="pill paid">ชำระแล้ว · รอยืนยัน</span>',
+      confirmed: '<span class="pill confirmed">ยืนยันที่นั่งแล้ว ✓</span>',
+      cancelled: '<span class="pill cancelled">ยกเลิก</span>'
+    }[s] || s);
+
+    async function lookup() {
+      const phone = document.getElementById('phone').value.trim();
+      const err = document.getElementById('err');
+      const box = document.getElementById('results');
+      err.innerHTML = '';
+      if (phone.replace(/\D/g,'').length < 8) { err.innerHTML = '<div class="alert err">กรุณากรอกเบอร์โทรให้ถูกต้อง</div>'; return; }
+      box.innerHTML = '<p class="muted center">กำลังค้นหา…</p>';
+      const res = await fetch('/api/my-registrations?phone=' + encodeURIComponent(phone));
+      const data = await res.json();
+      if (!res.ok) { box.innerHTML = ''; err.innerHTML = `<div class="alert err">${data.error||'เกิดข้อผิดพลาด'}</div>`; return; }
+      if (!data.count) {
+        box.innerHTML = `<div class="panel center" style="max-width:460px;margin:0 auto">
+          <div style="font-size:48px">🔍</div>
+          <p>ไม่พบการสมัครด้วยเบอร์นี้<br><span class="muted">ลองตรวจสอบเบอร์อีกครั้ง หรือสอบถามผู้จัดทาง LINE</span></p></div>`;
+        return;
+      }
+      const name = data.registrations[0].name;
+      box.innerHTML = `
+        <p class="center" style="color:var(--brown)"><b>สวัสดีค่ะ ${name}</b> · พบการสมัคร ${data.count} รายการ</p>
+        <div class="grid" style="grid-template-columns:1fr">
+        ${data.registrations.map(r => `
+          <div class="card"><div class="body">
+            <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+              <h3 style="margin:0">${r.workshopTitle}</h3>
+              ${statusPill(r.status)}
+            </div>
+            ${r.round ? `<div class="muted">📅 ${fmtDate(r.round.date)} · ${r.round.time}</div>` : ''}
+            ${r.location ? `<div class="muted">📍 ${r.location}</div>` : ''}
+            <div class="muted">👥 ${r.people} ท่าน${r.addons&&r.addons.length?` · ➕ ${r.addons.map(a=>a.name).join(', ')}`:''}</div>
+            <div class="price">${money(r.amount)} บาท</div>
+            <div class="muted" style="font-size:12px">รหัสอ้างอิง: ${r.id}</div>
+          </div></div>`).join('')}
+        </div>
+        <div class="alert info mt">มีคำถามเรื่องการชำระเงินหรือยืนยันที่นั่ง? ทักผู้จัดทาง LINE ได้เลยค่ะ</div>`;
+    }
+
+    // allow ?phone= in URL to auto-search
+    const qp = new URLSearchParams(location.search).get('phone');
+    if (qp) { document.getElementById('phone').value = qp; lookup(); }
+  </script>
+</body>
+</html>
