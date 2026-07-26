@@ -81,6 +81,31 @@ app.get('/api/payment-info', (req, res) => {
   });
 });
 
+// ---------- public: look up my own registrations by phone ----------
+app.get('/api/my-registrations', (req, res) => {
+  const digits = (s) => String(s || '').replace(/\D/g, '');
+  const q = digits(req.query.phone);
+  if (q.length < 8) return res.status(400).json({ error: 'กรุณากรอกเบอร์โทรให้ถูกต้อง (อย่างน้อย 8 หลัก)' });
+  const matched = db.listRegistrations().filter((r) => digits(r.phone) === q);
+  const out = matched.map((r) => {
+    const ws = db.getWorkshop(r.workshopId);
+    const round = ws && ws.rounds.find((x) => x.id === r.roundId);
+    return {
+      id: r.id,
+      name: r.name,
+      workshopTitle: ws ? ws.title : '(เวิร์กช็อปถูกลบแล้ว)',
+      location: ws ? ws.location : '',
+      round: round ? { date: round.date, time: round.time } : null,
+      people: r.people,
+      addons: r.addons || [],
+      amount: r.amount,
+      status: r.status,
+      createdAt: r.createdAt
+    };
+  });
+  res.json({ count: out.length, registrations: out });
+});
+
 // ---------- public: workshops ----------
 app.get('/api/workshops', (req, res) => {
   res.json(db.listWorkshops({ onlyActive: true }).map(publicWorkshop));
@@ -313,6 +338,7 @@ app.get('/api/admin/summary', requireAdmin, (req, res) => {
 // SPA-ish routes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/workshop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'workshop.html')));
+app.get('/my', (req, res) => res.sendFile(path.join(__dirname, 'public', 'my.html')));
 
 db.init()
   .catch((e) => console.error('DB init error:', e.message))
