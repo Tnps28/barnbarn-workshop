@@ -33,7 +33,7 @@
     const wsId = qs.get('id');
     const money = (n) => Number(n).toLocaleString('th-TH');
     const fmtDate = (d) => { try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});} catch { return d; } };
-    let WS = null, CFG = null, REG = null, REG_ROUND = null;
+    let WS = null, CFG = null, REG = null, REG_ROUND = null, SELECTED_ADDONS = [];
 
     async function boot() {
       const [wRes, cRes] = await Promise.all([ fetch('/api/workshops/'+wsId), fetch('/api/config') ]);
@@ -72,6 +72,15 @@
               <label>จำนวนผู้เข้าร่วม</label>
               <select id="people">${[1,2,3,4].map(n=>`<option value="${n}">${n} ท่าน</option>`).join('')}</select>
             </div>
+            ${(WS.addons && WS.addons.length) ? `
+            <div class="field mt">
+              <label>อุปกรณ์พิเศษ (เลือกได้ถ้าต้องการ)</label>
+              ${WS.addons.map(a => `
+                <label class="rowline" style="cursor:pointer">
+                  <span class="k"><input type="checkbox" name="addon" value="${a.id}" style="width:auto;margin-right:8px">${a.name}</span>
+                  <span class="v">+${money(a.price)} บาท</span>
+                </label>`).join('')}
+            </div>` : ''}
             <button class="btn btn-primary block mt" onclick="toStep2()">ถัดไป ▸</button>
           </div>
           <aside class="panel">
@@ -87,13 +96,16 @@
       if (!round) return alert('กรุณาเลือกวันและรอบก่อนค่ะ');
       const roundId = round.value;
       const people = Number(document.getElementById('people').value);
+      const ids = [...document.querySelectorAll('input[name=addon]:checked')].map(c => c.value);
+      SELECTED_ADDONS = (WS.addons || []).filter(a => ids.includes(a.id));
       renderStep2(roundId, people);
     }
+    const addonsTotal = () => SELECTED_ADDONS.reduce((s, a) => s + (Number(a.price) || 0), 0);
 
     // ---------- STEP 2: กรอกข้อมูล ----------
     function renderStep2(roundId, people) {
       const r = WS.rounds.find(x => x.id === roundId);
-      const total = r.price * people;
+      const total = r.price * people + addonsTotal();
       document.getElementById('root').innerHTML = `
         <div class="two-col">
           <div class="panel">
@@ -138,6 +150,7 @@
             <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(r.date)}<br>${r.time}</span></div>
             <div class="rowline"><span class="k">ราคา/ท่าน</span><span class="v">${money(r.price)} บาท</span></div>
             <div class="rowline"><span class="k">จำนวน</span><span class="v">${people} ท่าน</span></div>
+            ${SELECTED_ADDONS.map(a=>`<div class="rowline"><span class="k">➕ ${a.name}</span><span class="v">+${money(a.price)} บาท</span></div>`).join('')}
             <div class="rowline"><span class="k total">ยอดรวม</span><span class="v total">${money(total)} บาท</span></div>
           </aside>
         </div>`;
@@ -158,6 +171,7 @@
         name: val('name'), phone: val('phone'), email: val('email'),
         lineId: val('lineId'),
         allergy: specVal('allergy'), medical: specVal('medical'),
+        addonIds: SELECTED_ADDONS.map(a => a.id),
         note: val('note')
       };
       if (!body.name || !body.phone) { showErr('กรุณากรอกชื่อและเบอร์โทรศัพท์'); return; }
@@ -191,6 +205,7 @@
             <div class="rowline"><span class="k">เวิร์กช็อป</span><span class="v">${WS.title}</span></div>
             <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(round.date)} ${round.time}</span></div>
             <div class="rowline"><span class="k">ผู้สมัคร</span><span class="v">${REG.name}</span></div>
+            ${(REG.addons||[]).map(a=>`<div class="rowline"><span class="k">➕ ${a.name}</span><span class="v">+${money(a.price)} บาท</span></div>`).join('')}
             <div class="rowline"><span class="k total">ยอดที่ต้องโอน</span><span class="v total">${money(REG.amount)} บาท</span></div>
           </aside>
         </div>`;

@@ -72,6 +72,11 @@
       <div id="rounds-wrap"></div>
       <button class="btn btn-ghost btn-sm mt" onclick="addRoundRow()">➕ เพิ่มรอบ</button>
 
+      <label style="font-weight:700;color:var(--brown);display:block;margin-top:16px">อุปกรณ์พิเศษ (ตัวเลือกเสริม)</label>
+      <div class="hint" style="margin-bottom:8px">ผู้สมัครเลือกได้ว่าจะรับและจ่ายเพิ่มหรือไม่ เช่น “ชุดอุปกรณ์กลับบ้าน +300”</div>
+      <div id="addons-wrap"></div>
+      <button class="btn btn-ghost btn-sm mt" onclick="addAddonRow()">➕ เพิ่มอุปกรณ์พิเศษ</button>
+
       <div class="field mt"><label><input type="checkbox" id="f-active" checked style="width:auto"> เปิดรับสมัคร (แสดงบนหน้าเว็บ)</label></div>
 
       <div style="display:flex;gap:10px;margin-top:8px">
@@ -189,7 +194,7 @@
       document.getElementById('reg-body').innerHTML = list.map(r => `
         <tr>
           <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}</td>
-          <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span></td>
+          <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}</td>
           <td>${money(r.amount)} ฿</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
           <td>
@@ -286,7 +291,24 @@
       document.getElementById('f-active').checked = w ? w.active : true;
       document.getElementById('rounds-wrap').innerHTML = '';
       (w?.rounds?.length ? w.rounds : [{}]).forEach(addRoundRow);
+      document.getElementById('addons-wrap').innerHTML = '';
+      (w?.addons || []).forEach(addAddonRow);
       document.getElementById('ws-modal').classList.add('open');
+    }
+    function addAddonRow(a={}) {
+      const div = document.createElement('div');
+      div.style.cssText = 'display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-bottom:8px;align-items:center';
+      div.className = 'addon-row';
+      div.innerHTML = `
+        <input placeholder="ชื่ออุปกรณ์ เช่น ชุดอุปกรณ์กลับบ้าน" value="${(a.name||'').replace(/"/g,'&quot;')}" data-k="name">
+        <input type="number" placeholder="ราคาเพิ่ม" value="${a.price??''}" data-k="price">
+        <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+      document.getElementById('addons-wrap').appendChild(div);
+    }
+    function collectAddons() {
+      return [...document.querySelectorAll('#addons-wrap .addon-row')].map(row => {
+        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value); return o;
+      }).filter(a => (a.name||'').trim());
     }
     function addRoundRow(r={}) {
       const div = document.createElement('div');
@@ -309,7 +331,7 @@
       const payload = {
         title: v('f-title'), subtitle: v('f-subtitle'), category: v('f-category'),
         description: v('f-desc'), location: v('f-location'), image: v('f-image'),
-        active: document.getElementById('f-active').checked, rounds: collectRounds()
+        active: document.getElementById('f-active').checked, rounds: collectRounds(), addons: collectAddons()
       };
       if (!payload.title) return alert('กรุณาใส่ชื่อเวิร์กช็อป');
       const url = id ? '/api/admin/workshops/'+id : '/api/admin/workshops';
