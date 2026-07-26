@@ -108,7 +108,25 @@
             <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>
             <div class="field"><label>อีเมล</label><input id="email" type="email" placeholder="you@email.com"><div class="hint">ใช้สำหรับใบเสร็จ (ไม่บังคับ)</div></div>
             <div class="field"><label>LINE ID / ชื่อบน LINE</label><input id="lineId" placeholder="@lineid หรือชื่อของคุณ"><div class="hint">เพื่อให้เราส่งข้อความยืนยันหาคุณได้</div></div>
-            <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="note" placeholder="แพ้อาหาร / มากับเพื่อน / คำถามอื่น ๆ"></textarea></div>
+
+            <div class="field">
+              <label>การแพ้อาหาร</label>
+              <div style="display:flex;gap:20px;margin-bottom:6px">
+                <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="allergy-has" value="none" checked onchange="toggleSpec('allergy')" style="width:auto">ไม่มี</label>
+                <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="allergy-has" value="yes" onchange="toggleSpec('allergy')" style="width:auto">มี</label>
+              </div>
+              <input id="allergy-text" class="hidden" placeholder="ระบุอาหารที่แพ้ เช่น กุ้ง ถั่ว นม แป้งสาลี">
+            </div>
+            <div class="field">
+              <label>โรคประจำตัว</label>
+              <div style="display:flex;gap:20px;margin-bottom:6px">
+                <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="medical-has" value="none" checked onchange="toggleSpec('medical')" style="width:auto">ไม่มี</label>
+                <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="medical-has" value="yes" onchange="toggleSpec('medical')" style="width:auto">มี</label>
+              </div>
+              <input id="medical-text" class="hidden" placeholder="ระบุโรคประจำตัว เช่น หอบหืด ภูมิแพ้ ความดัน">
+            </div>
+
+            <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="note" placeholder="มากับเพื่อน / คำถามอื่น ๆ"></textarea></div>
             <div style="display:flex;gap:10px">
               <button class="btn btn-ghost" onclick="renderStep1()">◂ ย้อนกลับ</button>
               <button class="btn btn-primary" style="flex:1" onclick="submitReg('${roundId}',${people})">ยืนยันข้อมูล & ไปชำระเงิน ▸</button>
@@ -125,13 +143,26 @@
         </div>`;
     }
 
+    function toggleSpec(name) {
+      const yes = document.querySelector(`input[name="${name}-has"]:checked`).value === 'yes';
+      const box = document.getElementById(name + '-text');
+      box.classList.toggle('hidden', !yes);
+      if (!yes) box.value = '';
+    }
+    const specVal = (name) =>
+      document.querySelector(`input[name="${name}-has"]:checked`).value === 'yes' ? val(name + '-text') : '';
+
     async function submitReg(roundId, people) {
       const body = {
         workshopId: wsId, roundId, people,
         name: val('name'), phone: val('phone'), email: val('email'),
-        lineId: val('lineId'), note: val('note')
+        lineId: val('lineId'),
+        allergy: specVal('allergy'), medical: specVal('medical'),
+        note: val('note')
       };
       if (!body.name || !body.phone) { showErr('กรุณากรอกชื่อและเบอร์โทรศัพท์'); return; }
+      if (document.querySelector('input[name="allergy-has"]:checked').value === 'yes' && !body.allergy) { showErr('กรุณาระบุอาหารที่แพ้ หรือเลือก “ไม่มี”'); return; }
+      if (document.querySelector('input[name="medical-has"]:checked').value === 'yes' && !body.medical) { showErr('กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”'); return; }
       const res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { showErr(data.error || 'เกิดข้อผิดพลาด'); return; }

@@ -188,7 +188,7 @@
       }[s]||s);
       document.getElementById('reg-body').innerHTML = list.map(r => `
         <tr>
-          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}</span></td>
+          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}</td>
           <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span></td>
           <td>${money(r.amount)} ฿</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
