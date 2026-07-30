@@ -53,18 +53,21 @@ function publicWorkshop(ws) {
     rounds: ws.rounds.map((r) => ({
       ...r,
       taken: db.seatsTaken(ws.id, r.id),
-      remaining: Math.max(0, r.seats - db.seatsTaken(ws.id, r.id))
+      remaining: Math.max(0, r.seats - db.seatsTaken(ws.id, r.id)),
+      waitlist: db.waitlistCount(ws.id, r.id)
     }))
   };
 }
 
 // ---------- public config ----------
 app.get('/api/config', (req, res) => {
+  db.expireStale(); // runs on every keep-awake ping too (releases unpaid seats)
   res.json({
     paymentConfigured: paymentConfigured(),
     lineConfigured: lineConfigured(),
     omisePublicKey: OMISE_PUBLIC_KEY,
-    lineAddFriendUrl: LINE_ADD_FRIEND_URL
+    lineAddFriendUrl: LINE_ADD_FRIEND_URL,
+    holdHours: db.holdHours()
   });
 });
 
@@ -127,6 +130,7 @@ app.post('/api/register', (req, res) => {
   const round = roundOf(ws, roundId);
   if (!ws || !round) return res.status(404).json({ error: 'ไม่พบเวิร์กช็อปหรือรอบที่เลือก' });
 
+  db.expireStale();
   const people = Number(req.body.people) || 1;
   const remaining = round.seats - db.seatsTaken(workshopId, roundId);
   if (people > remaining) {
@@ -153,6 +157,19 @@ app.post('/api/register', (req, res) => {
     amount: round.price * people + addonsTotal
   });
   res.json({ registration: reg, workshop: { title: ws.title, location: ws.location }, round });
+});
+
+// ---------- public: join waitlist (when a round is full) ----------
+app.post('/api/waitlist', (req, res) => {
+  const { workshopId, roundId, name, phone } = req.body || {};
+  if (!workshopId || !roundId || !name || !phone) {
+    return res.status(400).json({ error: 'กรุณากรอกชื่อและเบอร์โทร' });
+  }
+  const ws = db.getWorkshop(workshopId);
+  const round = roundOf(ws, roundId);
+  if (!ws || !round) return res.status(404).json({ error: 'ไม่พบรอบที่เลือก' });
+  const w = db.addWaitlist({ workshopId, roundId, name, phone });
+  res.json({ ok: true, waitlist: w });
 });
 
 // ---------- public: notify payment (upload slip) ----------
@@ -284,6 +301,55 @@ app.post('/api/admin/registrations/:id/confirm', requireAdmin, async (req, res) 
   res.json({ sent: result.sent, demo: result.demo, message, error: result.error });
 });
 
+// admin toggles attendance (check-in on event day)
+app.post('/api/admin/registrations/:id/attend', requireAdmin, (req, res) => {
+  const reg = db.getRegistration(req.params.id);
+  if (!reg) return res.status(404).json({ error: 'not found' });
+  const updated = db.updateRegistration(reg.id, { attended: !reg.attended });
+  res.json(updated);
+});
+
+// admin edits a registration (name/phone/people/round/allergy/medical/note); recomputes amount
+app.put('/api/admin/registrations/:id/edit', requireAdmin, (req, res) => {
+  const reg = db.getRegistration(req.params.id);
+  if (!reg) return res.status(404).json({ error: 'not found' });
+  const b = req.body || {};
+  const ws = db.getWorkshop(reg.workshopId);
+  const patch = {
+    name: b.name ?? reg.name,
+    phone: b.phone ?? reg.phone,
+    email: b.email ?? reg.email,
+    lineId: b.lineId ?? reg.lineId,
+    allergy: b.allergy ?? reg.allergy,
+    medical: b.medical ?? reg.medical,
+    note: b.note ?? reg.note,
+    people: Number(b.people) || reg.people,
+    roundId: b.roundId ?? reg.roundId
+  };
+  // recompute amount from the (possibly new) round + existing add-ons
+  const round = ws && ws.rounds.find((r) => r.id === patch.roundId);
+  if (round) {
+    const addonsTotal = (reg.addons || []).reduce((s, a) => s + (Number(a.price) || 0), 0);
+    patch.amount = round.price * patch.people + addonsTotal;
+  }
+  const updated = db.updateRegistration(reg.id, patch);
+  res.json(updated);
+});
+
+// ---------- admin: waitlist ----------
+app.get('/api/admin/waitlist', requireAdmin, (req, res) => {
+  const out = db.listWaitlist().map((w) => {
+    const ws = db.getWorkshop(w.workshopId);
+    const round = ws && ws.rounds.find((r) => r.id === w.roundId);
+    return { ...w, workshopTitle: ws ? ws.title : '(ลบแล้ว)', round };
+  });
+  res.json(out);
+});
+app.delete('/api/admin/waitlist/:id', requireAdmin, (req, res) => {
+  db.removeWaitlist(req.params.id);
+  res.json({ ok: true });
+});
+
 // ---------- LINE webhook (captures userId when a participant messages your OA) ----------
 app.post('/api/line/webhook', (req, res) => {
   try {
@@ -321,6 +387,7 @@ app.post('/api/admin/payment-settings', requireAdmin, (req, res) => {
 
 // admin dashboard summary
 app.get('/api/admin/summary', requireAdmin, async (req, res) => {
+  db.expireStale();
   const regs = db.listRegistrations();
   let storage = { available: false };
   try {
@@ -330,11 +397,13 @@ app.get('/api/admin/summary', requireAdmin, async (req, res) => {
   }
   res.json({
     workshops: db.listWorkshops().length,
-    totalRegistrations: regs.length,
+    totalRegistrations: regs.filter((r) => r.status !== 'expired').length,
     pendingPayment: regs.filter((r) => r.status === 'pending_payment').length,
     awaitingVerification: regs.filter((r) => r.status === 'awaiting_verification').length,
     paid: regs.filter((r) => r.status === 'paid').length,
     confirmed: regs.filter((r) => r.status === 'confirmed').length,
+    attended: regs.filter((r) => r.attended).length,
+    waitlist: db.listWaitlist().length,
     revenue: regs
       .filter((r) => r.status === 'paid' || r.status === 'confirmed')
       .reduce((s, r) => s + Number(r.amount || 0), 0),

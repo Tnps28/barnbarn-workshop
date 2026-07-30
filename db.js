@@ -62,9 +62,13 @@ function seed() {
       accountNumber: '',
       note: '',
       updatedAt: null
-    }
+    },
+    waitlist: []
   };
 }
+
+// how long an unpaid (no slip) reservation holds a seat before it's released
+const HOLD_HOURS = 24;
 
 // ---------- file backend ----------
 function ensureDir() {
@@ -103,10 +107,12 @@ async function initMongo() {
     client,
     wk: database.collection('workshops'),
     rg: database.collection('registrations'),
-    st: database.collection('settings')
+    st: database.collection('settings'),
+    wl: database.collection('waitlist')
   };
   const workshops = await mongo.wk.find({}).toArray();
   const registrations = await mongo.rg.find({}).toArray();
+  const waitlist = await mongo.wl.find({}).toArray();
   const settingsDoc = await mongo.st.findOne({ _id: 'main' });
   if (!workshops.length && !settingsDoc) {
     DB = seed();
@@ -115,7 +121,8 @@ async function initMongo() {
     DB = {
       workshops: workshops.map(stripId),
       registrations: registrations.map(stripId),
-      settings: settingsDoc ? stripId(settingsDoc) : seed().settings
+      settings: settingsDoc ? stripId(settingsDoc) : seed().settings,
+      waitlist: waitlist.map(stripId)
     };
   }
 }
@@ -127,6 +134,9 @@ async function persistMongo(data) {
   if (data.registrations.length)
     await mongo.rg.insertMany(data.registrations.map((r) => ({ _id: r.id, ...r })));
   await mongo.st.replaceOne({ _id: 'main' }, { _id: 'main', ...data.settings }, { upsert: true });
+  await mongo.wl.deleteMany({});
+  if ((data.waitlist || []).length)
+    await mongo.wl.insertMany(data.waitlist.map((w) => ({ _id: w.id, ...w })));
 }
 
 // ---------- init (called once at startup) ----------
@@ -178,7 +188,58 @@ function db_slipCount() {
 // ---------- core read/write (sync interface) ----------
 function read() {
   if (!DB) DB = loadFromFile();
+  if (!DB.waitlist) DB.waitlist = [];
   return DB;
+}
+
+// ---------- auto-release unpaid seats after HOLD_HOURS ----------
+// Registrations still 'pending_payment' (never uploaded a slip) past the hold
+// window are marked 'expired' so their seats free up automatically.
+export function expireStale() {
+  const db = read();
+  const cutoff = Date.now() - HOLD_HOURS * 3600 * 1000;
+  let changed = 0;
+  for (const r of db.registrations) {
+    if (r.status === 'pending_payment' && new Date(r.createdAt).getTime() < cutoff) {
+      r.status = 'expired';
+      changed++;
+    }
+  }
+  if (changed) write(db);
+  return changed;
+}
+export const holdHours = () => HOLD_HOURS;
+
+// ---------- Waitlist ----------
+export function listWaitlist(filter = {}) {
+  let list = read().waitlist || [];
+  if (filter.workshopId) list = list.filter((w) => w.workshopId === filter.workshopId);
+  return list.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+}
+export function waitlistCount(workshopId, roundId) {
+  return (read().waitlist || []).filter(
+    (w) => w.workshopId === workshopId && w.roundId === roundId
+  ).length;
+}
+export function addWaitlist(payload) {
+  const db = read();
+  const w = {
+    id: uid('wl'),
+    workshopId: payload.workshopId,
+    roundId: payload.roundId,
+    name: payload.name,
+    phone: payload.phone,
+    createdAt: new Date().toISOString()
+  };
+  db.waitlist.push(w);
+  write(db);
+  return w;
+}
+export function removeWaitlist(id) {
+  const db = read();
+  db.waitlist = (db.waitlist || []).filter((w) => w.id !== id);
+  write(db);
+  return true;
 }
 function write(data) {
   DB = data;
@@ -316,6 +377,7 @@ export function createRegistration(payload) {
     notifiedAt: null,
     confirmed: false,
     confirmationMessage: '',
+    attended: false,
     createdAt: new Date().toISOString()
   };
   db.registrations.push(reg);
