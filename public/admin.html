@@ -41,19 +41,29 @@
 
     <h2 class="section-title" style="margin-top:36px">รายชื่อผู้สมัคร</h2>
     <div class="panel" style="padding:8px;overflow:auto">
-      <div style="padding:8px 12px">
-        <select id="filter-status" onchange="renderRegs()" style="max-width:240px">
+      <div style="padding:8px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input id="reg-search" placeholder="🔎 ค้นหา ชื่อ / เบอร์" oninput="renderRegs()" style="max-width:220px">
+        <select id="filter-status" onchange="renderRegs()" style="max-width:220px">
           <option value="">ทุกสถานะ</option>
           <option value="pending_payment">รอชำระเงิน</option>
           <option value="awaiting_verification">แจ้งโอนแล้ว (รอตรวจสอบ)</option>
           <option value="paid">ชำระแล้ว (รอยืนยัน)</option>
           <option value="confirmed">ยืนยันแล้ว</option>
           <option value="cancelled">ยกเลิก</option>
+          <option value="expired">หมดเวลา (ปล่อยที่นั่งแล้ว)</option>
         </select>
       </div>
       <table>
         <thead><tr><th>ผู้สมัคร</th><th>เวิร์กช็อป / รอบ</th><th>ยอด</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
         <tbody id="reg-body"></tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title" style="margin-top:36px">🔔 คิวสำรอง (Waitlist)</h2>
+    <div class="panel" style="padding:8px;overflow:auto">
+      <table>
+        <thead><tr><th>ชื่อ</th><th>เบอร์โทร</th><th>เวิร์กช็อป / รอบ</th><th>วันที่ขอคิว</th><th></th></tr></thead>
+        <tbody id="wait-body"></tbody>
       </table>
     </div>
   </main>
@@ -127,6 +137,26 @@
     </div>
   </div>
 
+  <!-- EDIT REGISTRATION MODAL -->
+  <div class="modal-bg" id="editreg-modal">
+    <div class="modal">
+      <h3>✏️ แก้ไขใบสมัคร</h3>
+      <input type="hidden" id="er-id">
+      <div class="field"><label>ชื่อ-นามสกุล</label><input id="er-name"></div>
+      <div class="field"><label>เบอร์โทรศัพท์</label><input id="er-phone"></div>
+      <div class="field"><label>รอบ</label><select id="er-round"></select></div>
+      <div class="field"><label>จำนวน (ท่าน)</label><input id="er-people" type="number" min="1"></div>
+      <div class="field"><label>การแพ้อาหาร</label><input id="er-allergy" placeholder="ว่าง = ไม่มี"></div>
+      <div class="field"><label>โรคประจำตัว</label><input id="er-medical" placeholder="ว่าง = ไม่มี"></div>
+      <div class="field"><label>หมายเหตุ</label><textarea id="er-note"></textarea></div>
+      <p class="hint">* ยอดจะคำนวณใหม่อัตโนมัติจากรอบ + จำนวน + อุปกรณ์พิเศษเดิม</p>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveEditReg()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let PW = '';
     const H = () => ({ 'Content-Type':'application/json', 'x-admin-password': PW });
@@ -144,6 +174,7 @@
       loadAll();
     }
 
+    let AUTO = null;
     async function loadAll() {
       const [wRes, sRes] = await Promise.all([
         fetch('/api/admin/workshops', { headers: H() }),
@@ -151,18 +182,23 @@
       ]);
       WORKSHOPS = await wRes.json();
       const s = await sRes.json();
+      const aw = s.awaitingVerification || 0;
       document.getElementById('stats').innerHTML = `
         ${stat(s.totalRegistrations,'ผู้สมัครทั้งหมด')}
         ${stat(s.pendingPayment,'รอชำระเงิน')}
-        ${stat(s.awaitingVerification||0,'แจ้งโอน รอตรวจสอบ')}
+        ${stat(aw,'แจ้งโอน รอตรวจสอบ', aw>0)}
         ${stat(s.paid,'ชำระแล้ว รอยืนยัน')}
         ${stat(s.confirmed,'ยืนยันแล้ว')}
+        ${stat(s.attended||0,'เช็คอินแล้ว')}
+        ${stat(s.waitlist||0,'คิวสำรอง')}
         ${stat(money(s.revenue)+' ฿','ยอดรับชำระ')}`;
       renderStorage(s.storage);
       renderWorkshops();
-      await loadRegs();
+      await Promise.all([loadRegs(), loadWaitlist()]);
+      // auto-refresh every 60s so new slips/registrations appear without manual refresh
+      if (!AUTO) AUTO = setInterval(loadAll, 60000);
     }
-    const stat = (n,l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+    const stat = (n,l,alert) => `<div class="stat" style="${alert?'border-color:var(--danger);background:#fdeee9':''}"><div class="n" style="${alert?'color:var(--danger)':''}">${n}${alert?' 🔴':''}</div><div class="l">${l}</div></div>`;
     function renderStorage(st) {
       const el = document.getElementById('storage');
       if (!st || !st.available) { el.innerHTML = ''; return; }
@@ -192,8 +228,9 @@
           </div>
           <h3>${w.title}</h3>
           <div class="rounds">${w.rounds.map(r=>`📅 ${fmtDate(r.date)} · ${r.time} · <b>${r.taken}/${r.seats}</b> ที่ · ${money(r.price)}฿`).join('<br>')||'<span class="muted">ยังไม่มีรอบ</span>'}</div>
-          <div class="foot" style="display:flex;gap:8px">
+          <div class="foot" style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="openWorkshop('${w.id}')">แก้ไข</button>
+            <button class="btn btn-ghost btn-sm" onclick="dupWorkshop('${w.id}')">📑 ทำซ้ำ</button>
             <button class="btn btn-ghost btn-sm" onclick="delWorkshop('${w.id}')" style="color:var(--danger);border-color:var(--danger)">ลบ</button>
           </div>
         </div></div>`).join('') || '<p class="muted">ยังไม่มีเวิร์กช็อป กด “เพิ่มเวิร์กช็อปใหม่” เพื่อเริ่ม</p>';
@@ -205,13 +242,17 @@
     }
     function renderRegs() {
       const f = document.getElementById('filter-status').value;
-      const list = f ? REGS.filter(r=>r.status===f) : REGS;
+      const q = (document.getElementById('reg-search').value||'').trim().toLowerCase();
+      const qd = q.replace(/\D/g,'');
+      let list = f ? REGS.filter(r=>r.status===f) : REGS;
+      if (q) list = list.filter(r => (r.name||'').toLowerCase().includes(q) || (qd && (r.phone||'').replace(/\D/g,'').includes(qd)));
       const statusPill = (s) => ({
         pending_payment:'<span class="pill pending">รอชำระ</span>',
         awaiting_verification:'<span class="pill pending">แจ้งโอนแล้ว</span>',
         paid:'<span class="pill paid">ชำระแล้ว</span>',
         confirmed:'<span class="pill confirmed">ยืนยันแล้ว</span>',
-        cancelled:'<span class="pill cancelled">ยกเลิก</span>'
+        cancelled:'<span class="pill cancelled">ยกเลิก</span>',
+        expired:'<span class="pill cancelled">หมดเวลา</span>'
       }[s]||s);
       document.getElementById('reg-body').innerHTML = list.map(r => `
         <tr>
@@ -219,20 +260,85 @@
           <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}</td>
           <td>${money(r.amount)} ฿</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
-          <td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap">
             ${(r.status==='pending_payment'||r.status==='awaiting_verification')?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ยืนยันรับเงินแล้ว</button>`:''}
             ${r.status==='paid'?`<button class="btn btn-blue btn-sm" onclick="confirmReg('${r.id}')">ส่งยืนยัน LINE</button>`:''}
-            ${r.status!=='cancelled'&&r.status!=='confirmed'?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
-            ${r.status==='confirmed'?'<span class="muted">✓ เสร็จสิ้น</span>':''}
+            ${r.status==='confirmed'?`<button class="btn ${r.attended?'btn-ghost':'btn-blue'} btn-sm" onclick="attendReg('${r.id}')">${r.attended?'✅ เช็คอินแล้ว':'📍 เช็คอิน'}</button>`:''}
+            ${(r.status!=='cancelled'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="openEditReg('${r.id}')">✏️ แก้ไข</button>`:''}
+            ${(r.status!=='cancelled'&&r.status!=='confirmed'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
           </td>
         </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:20px">ยังไม่มีผู้สมัคร</td></tr>';
+    }
+
+    // ----- waitlist -----
+    let WAIT = [];
+    async function loadWaitlist() {
+      WAIT = await (await fetch('/api/admin/waitlist', { headers: H() })).json();
+      document.getElementById('wait-body').innerHTML = WAIT.map(w => `
+        <tr>
+          <td><b>${w.name}</b></td>
+          <td>${w.phone}</td>
+          <td>${w.workshopTitle}<br><span class="muted">${w.round?fmtDate(w.round.date)+' '+w.round.time:''}</span></td>
+          <td class="muted">${w.createdAt?new Date(w.createdAt).toLocaleString('th-TH'):''}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="removeWait('${w.id}')" style="color:var(--danger)">ลบ</button></td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:16px">ยังไม่มีคิวสำรอง</td></tr>';
+    }
+    async function removeWait(id){ if(!confirm('ลบออกจากคิวสำรอง?'))return; await fetch('/api/admin/waitlist/'+id,{method:'DELETE',headers:H()}); loadWaitlist(); }
+
+    // ----- check-in -----
+    async function attendReg(id){ await fetch(`/api/admin/registrations/${id}/attend`,{method:'POST',headers:H()}); loadAll(); }
+
+    // ----- edit registration -----
+    function openEditReg(id){
+      const r = REGS.find(x=>x.id===id); if(!r) return;
+      const ws = WORKSHOPS.find(w=>w.id===r.workshopId);
+      document.getElementById('er-id').value = r.id;
+      document.getElementById('er-name').value = r.name||'';
+      document.getElementById('er-phone').value = r.phone||'';
+      document.getElementById('er-people').value = r.people||1;
+      document.getElementById('er-allergy').value = r.allergy||'';
+      document.getElementById('er-medical').value = r.medical||'';
+      document.getElementById('er-note').value = r.note||'';
+      document.getElementById('er-round').innerHTML = (ws?ws.rounds:[]).map(rd =>
+        `<option value="${rd.id}" ${rd.id===r.roundId?'selected':''}>${fmtDate(rd.date)} ${rd.time} · ${money(rd.price)}฿</option>`).join('');
+      document.getElementById('editreg-modal').classList.add('open');
+    }
+    async function saveEditReg(){
+      const id = document.getElementById('er-id').value;
+      const body = {
+        name: v('er-name'), phone: v('er-phone'),
+        roundId: document.getElementById('er-round').value,
+        people: Number(document.getElementById('er-people').value)||1,
+        allergy: v('er-allergy'), medical: v('er-medical'),
+        note: document.getElementById('er-note').value.trim()
+      };
+      await fetch(`/api/admin/registrations/${id}/edit`,{method:'PUT',headers:H(),body:JSON.stringify(body)});
+      closeModal(); loadAll();
+    }
+
+    // ----- duplicate workshop -----
+    function dupWorkshop(id){
+      const w = WORKSHOPS.find(x=>x.id===id); if(!w) return;
+      openWorkshop(); // opens blank "add" modal
+      document.getElementById('ws-modal-title').textContent = 'ทำซ้ำเวิร์กช็อป (สร้างใหม่)';
+      document.getElementById('f-title').value = w.title + ' (สำเนา)';
+      document.getElementById('f-subtitle').value = w.subtitle||'';
+      document.getElementById('f-category').value = w.category||'';
+      document.getElementById('f-desc').value = w.description||'';
+      document.getElementById('f-location').value = w.location||'';
+      document.getElementById('f-image').value = w.image||'';
+      document.getElementById('addons-wrap').innerHTML='';
+      (w.addons||[]).forEach(addAddonRow);
+      // rounds: keep time/seats/price but clear dates (new dates for the new run)
+      document.getElementById('rounds-wrap').innerHTML='';
+      (w.rounds&&w.rounds.length?w.rounds:[{}]).forEach(rd=>addRoundRow({time:rd.time,seats:rd.seats,price:rd.price}));
     }
 
     function exportExcel() {
       if (!REGS.length) { alert('ยังไม่มีข้อมูลผู้สมัครให้ดาวน์โหลด'); return; }
       const statusTxt = {
         pending_payment:'รอชำระเงิน', awaiting_verification:'แจ้งโอนแล้ว-รอตรวจสอบ',
-        paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก'
+        paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก', expired:'หมดเวลา-ปล่อยที่นั่ง'
       };
       const esc = (v) => `"${String(v==null?'':v).replace(/"/g,'""')}"`;
       const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];

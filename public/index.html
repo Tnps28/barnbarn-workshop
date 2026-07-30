@@ -86,7 +86,7 @@
             <div class="price">เริ่มต้น ${money(minPrice)} บาท</div>
             <div class="foot">
               ${soldOut
-                ? '<button class="btn btn-ghost block" disabled>เต็มทุกรอบแล้ว</button>'
+                ? `<a class="btn btn-ghost block" href="/workshop?id=${w.id}">เต็มแล้ว · 🔔 เข้าคิวสำรอง</a>`
                 : `<a class="btn btn-primary block" href="/workshop?id=${w.id}">ดูรายละเอียด & สมัคร</a>`}
             </div>
           </div>

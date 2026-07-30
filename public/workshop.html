@@ -46,11 +46,14 @@
     function renderStep1() {
       const rounds = WS.rounds.map(r => {
         const full = r.remaining <= 0;
-        return `<label class="rowline" style="cursor:${full?'not-allowed':'pointer'};opacity:${full?.5:1}">
-          <span class="k"><input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto;margin-right:8px">
-            📅 ${fmtDate(r.date)} · ${r.time}</span>
-          <span class="v">${money(r.price)} บาท ${full?'(เต็ม)':`<span class="muted">· เหลือ ${r.remaining} ที่</span>`}</span>
-        </label>`;
+        return `<div class="rowline" style="opacity:${full?.75:1}">
+          <label class="k" style="cursor:${full?'not-allowed':'pointer'};display:flex;align-items:center;gap:8px">
+            <input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto">
+            📅 ${fmtDate(r.date)} · ${r.time}</label>
+          <span class="v">${money(r.price)} บาท ${full
+            ? `<span style="color:var(--danger)">· เต็ม</span> <button class="btn btn-ghost btn-sm" onclick="openWaitlist('${r.id}')">🔔 เข้าคิวสำรอง</button>`
+            : `<span class="muted">· เหลือ ${r.remaining} ที่</span>`}</span>
+        </div>`;
       }).join('');
 
       document.getElementById('root').innerHTML = `
@@ -68,6 +71,7 @@
             ${WS.location?`<p>📍 <b>สถานที่:</b> ${WS.location}</p>`:''}
             <h3 style="color:var(--brown)">เลือกวันและรอบ</h3>
             ${rounds}
+            <div id="waitlist-area"></div>
             <div class="field mt">
               <label>จำนวนผู้เข้าร่วม</label>
               <select id="people">${[1,2,3,4].map(n=>`<option value="${n}">${n} ท่าน</option>`).join('')}</select>
@@ -101,6 +105,54 @@
       renderStep2(roundId, people);
     }
     const addonsTotal = () => SELECTED_ADDONS.reduce((s, a) => s + (Number(a.price) || 0), 0);
+
+    function openWaitlist(roundId) {
+      const r = WS.rounds.find(x => x.id === roundId);
+      document.getElementById('waitlist-area').innerHTML = `
+        <div class="panel mt" style="box-shadow:none;border-color:var(--orange)">
+          <b style="color:var(--brown)">🔔 คิวสำรอง — ${fmtDate(r.date)} ${r.time}</b>
+          <p class="hint">รอบนี้เต็มแล้ว กรอกชื่อ+เบอร์ไว้ ถ้ามีคนสละสิทธิ์ ผู้จัดจะติดต่อกลับตามลำดับค่ะ</p>
+          <div class="field"><input id="wl-name" placeholder="ชื่อ-นามสกุล"></div>
+          <div class="field"><input id="wl-phone" inputmode="tel" placeholder="เบอร์โทรศัพท์"></div>
+          <div id="wl-err"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost" onclick="document.getElementById('waitlist-area').innerHTML=''">ยกเลิก</button>
+            <button class="btn btn-primary" style="flex:1" onclick="submitWaitlist('${roundId}')">เข้าคิวสำรอง</button>
+          </div>
+        </div>`;
+      document.getElementById('waitlist-area').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    async function submitWaitlist(roundId) {
+      const name = (document.getElementById('wl-name').value || '').trim();
+      const phone = (document.getElementById('wl-phone').value || '').trim();
+      if (!name || phone.replace(/\D/g,'').length < 8) {
+        document.getElementById('wl-err').innerHTML = '<div class="alert err">กรุณากรอกชื่อและเบอร์ให้ถูกต้อง</div>'; return;
+      }
+      const res = await fetch('/api/waitlist', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ workshopId: wsId, roundId, name, phone }) });
+      if (res.ok) {
+        document.getElementById('waitlist-area').innerHTML =
+          '<div class="alert ok mt">✅ เข้าคิวสำรองเรียบร้อย! ถ้ามีที่ว่างผู้จัดจะติดต่อกลับค่ะ</div>';
+      } else {
+        document.getElementById('wl-err').innerHTML = '<div class="alert err">เกิดข้อผิดพลาด กรุณาลองใหม่</div>';
+      }
+    }
+
+    // build "add to calendar" (Google) + map links from a round
+    function calendarLink(round) {
+      try {
+        const [s, e] = (round.time || '').split(/[–-]/).map(t => t.trim());
+        const d = round.date.replace(/-/g, '');
+        const pad = (t) => (t || '').replace(':', '') + '00';
+        const dates = s && e ? `${d}T${pad(s)}/${d}T${pad(e)}` : `${d}/${d}`;
+        const p = new URLSearchParams({
+          action: 'TEMPLATE', text: WS.title,
+          dates, details: 'BARNBARN Workshop', location: WS.location || ''
+        });
+        return 'https://calendar.google.com/calendar/render?' + p.toString();
+      } catch { return ''; }
+    }
+    const mapLink = () => WS.location ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(WS.location) : '';
 
     // ---------- STEP 2: กรอกข้อมูล ----------
     function renderStep2(roundId, people) {
@@ -197,6 +249,7 @@
               <div class="step active">3 · ชำระเงิน</div>
             </div>
             <h2 style="color:var(--brown)">ชำระเงินโดยโอนผ่านธนาคาร</h2>
+            <div class="alert warn">⏰ กรุณาโอนและแนบสลิปภายใน <b>${CFG.holdHours||24} ชั่วโมง</b> มิฉะนั้นที่นั่งจะถูกปล่อยคืนให้ผู้อื่นโดยอัตโนมัติ</div>
             <div id="pay-area"><p class="muted">กำลังโหลดข้อมูลการชำระเงิน…</p></div>
           </div>
           <aside class="panel">
@@ -300,6 +353,8 @@
             ผู้จัดกำลังตรวจสอบการชำระเงิน และจะส่งข้อความยืนยันที่นั่งให้คุณเร็ว ๆ นี้ค่ะ
             ${CFG.lineAddFriendUrl ? 'กรุณาเพิ่มเพื่อน LINE เพื่อรับการยืนยัน' : ''}</div>
           ${addFriend}
+          ${REG_ROUND ? `<a class="btn btn-blue block mt" href="${calendarLink(REG_ROUND)}" target="_blank" rel="noopener">📅 เพิ่มลงปฏิทิน (กันลืมวัน)</a>` : ''}
+          ${mapLink() ? `<a class="btn btn-ghost block mt" href="${mapLink()}" target="_blank" rel="noopener">📍 ดูแผนที่สถานที่</a>` : ''}
           <a class="btn btn-yellow block mt" href="/my?phone=${encodeURIComponent(REG.phone||'')}">📋 ดูการสมัครของฉัน</a>
           <a class="btn btn-ghost block mt" href="/">กลับหน้าแรก</a>
         </div>`;
