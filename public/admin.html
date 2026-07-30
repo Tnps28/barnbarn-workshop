@@ -27,6 +27,7 @@
   <!-- APP -->
   <main class="wrap hidden" id="app">
     <div class="stat-grid" id="stats"></div>
+    <div id="storage" style="margin-bottom:18px"></div>
 
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
@@ -157,10 +158,30 @@
         ${stat(s.paid,'ชำระแล้ว รอยืนยัน')}
         ${stat(s.confirmed,'ยืนยันแล้ว')}
         ${stat(money(s.revenue)+' ฿','ยอดรับชำระ')}`;
+      renderStorage(s.storage);
       renderWorkshops();
       await loadRegs();
     }
     const stat = (n,l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+    function renderStorage(st) {
+      const el = document.getElementById('storage');
+      if (!st || !st.available) { el.innerHTML = ''; return; }
+      const pct = st.percent || 0;
+      const warn = pct >= 80, caution = pct >= 60;
+      const color = warn ? 'var(--danger)' : (caution ? 'var(--warn)' : 'var(--green)');
+      el.innerHTML = `
+        <div class="panel" style="padding:14px 18px">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:14px;color:var(--brown)">
+            <b>💾 พื้นที่ฐานข้อมูล (สลิป + ข้อมูลทั้งหมด)</b>
+            <span>${st.usedMB} / ${st.limitMB} MB · <b>${pct}%</b>${st.slips!=null?` · สลิป ${st.slips} ใบ`:''}</span>
+          </div>
+          <div style="height:11px;background:#eee;border-radius:6px;overflow:hidden;margin-top:8px">
+            <div style="height:100%;width:${Math.max(2,pct)}%;background:${color};transition:width .3s"></div>
+          </div>
+          ${warn ? '<div class="alert err" style="margin-top:10px">⚠️ พื้นที่ใกล้เต็มแล้ว! แนะนำ: กด “ดาวน์โหลด Excel” + เซฟสลิปเก็บไว้ในเครื่อง แล้วยกเลิก/ลบใบสมัครเก่าที่จบงานแล้ว หรืออัปเกรดฐานข้อมูล</div>'
+            : caution ? '<div class="alert warn" style="margin-top:10px">พื้นที่ใช้ไปเกินครึ่งแล้ว เริ่มวางแผนดาวน์โหลดเก็บข้อมูลเก่าได้</div>' : ''}
+        </div>`;
+    }
 
     function renderWorkshops() {
       document.getElementById('ws-list').innerHTML = WORKSHOPS.map(w => `
