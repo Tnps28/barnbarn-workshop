@@ -320,8 +320,14 @@ app.post('/api/admin/payment-settings', requireAdmin, (req, res) => {
 });
 
 // admin dashboard summary
-app.get('/api/admin/summary', requireAdmin, (req, res) => {
+app.get('/api/admin/summary', requireAdmin, async (req, res) => {
   const regs = db.listRegistrations();
+  let storage = { available: false };
+  try {
+    storage = await db.getStorageStats();
+  } catch (e) {
+    /* ignore */
+  }
   res.json({
     workshops: db.listWorkshops().length,
     totalRegistrations: regs.length,
@@ -331,7 +337,8 @@ app.get('/api/admin/summary', requireAdmin, (req, res) => {
     confirmed: regs.filter((r) => r.status === 'confirmed').length,
     revenue: regs
       .filter((r) => r.status === 'paid' || r.status === 'confirmed')
-      .reduce((s, r) => s + Number(r.amount || 0), 0)
+      .reduce((s, r) => s + Number(r.amount || 0), 0),
+    storage
   });
 });
 

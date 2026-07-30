@@ -147,6 +147,34 @@ export async function init() {
   );
 }
 
+// ---------- storage usage (MongoDB Atlas free tier = 512 MB) ----------
+export async function getStorageStats() {
+  if (!mongo) return { available: false, backend: 'file' };
+  try {
+    const s = await mongo.client.db('barnbarn').command({ dbStats: 1 });
+    const usedBytes = (s.storageSize || 0) + (s.indexSize || 0);
+    const limitBytes = 512 * 1024 * 1024;
+    return {
+      available: true,
+      backend: 'mongodb',
+      usedMB: +(usedBytes / 1048576).toFixed(2),
+      dataMB: +((s.dataSize || 0) / 1048576).toFixed(2),
+      limitMB: 512,
+      percent: +Math.min(100, (usedBytes / limitBytes) * 100).toFixed(1),
+      slips: db_slipCount()
+    };
+  } catch (e) {
+    return { available: false, error: e.message };
+  }
+}
+function db_slipCount() {
+  try {
+    return read().registrations.filter((r) => r.slipImage).length;
+  } catch {
+    return 0;
+  }
+}
+
 // ---------- core read/write (sync interface) ----------
 function read() {
   if (!DB) DB = loadFromFile();
