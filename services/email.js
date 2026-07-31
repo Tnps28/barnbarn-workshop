@@ -5,8 +5,10 @@
 
 import nodemailer from 'nodemailer';
 
-const EMAIL_USER = process.env.EMAIL_USER || '';
-const EMAIL_PASS = process.env.EMAIL_PASS || '';
+const EMAIL_USER = (process.env.EMAIL_USER || '').trim();
+// Gmail App Passwords are displayed as "abcd efgh ijkl mnop" — strip ALL
+// whitespace so it works whether or not the user pasted the spaces.
+const EMAIL_PASS = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
 const EMAIL_FROM = process.env.EMAIL_FROM || 'BARNBARN Workshop';
 
 export const emailConfigured = () => Boolean(EMAIL_USER && EMAIL_PASS);
@@ -114,6 +116,8 @@ export async function sendConfirmationEmail(reg, workshop, round) {
     });
     return { sent: true };
   } catch (e) {
-    return { sent: false, error: String(e && e.message ? e.message : e) };
+    const msg = String(e && e.message ? e.message : e);
+    console.error('📧 EMAIL send error:', msg, '| code:', e && e.code, '| response:', e && e.response);
+    return { sent: false, error: msg };
   }
 }
