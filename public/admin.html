@@ -378,7 +378,17 @@
       URL.revokeObjectURL(a.href);
     }
 
-    async function markPaid(id) { await fetch(`/api/admin/registrations/${id}/mark-paid`,{method:'POST',headers:H()}); loadAll(); }
+    async function markPaid(id) {
+      const res = await fetch(`/api/admin/registrations/${id}/mark-paid`,{method:'POST',headers:H()});
+      let er = null; try { er = (await res.json()).emailResult; } catch(e){}
+      if (er) {
+        if (er.sent) alert('✅ ยืนยันรับเงินแล้ว และส่งอีเมลยืนยันให้ผู้สมัครเรียบร้อย 📧');
+        else if (er.skipped==='no_email') alert('✅ ยืนยันรับเงินแล้ว (ผู้สมัครไม่ได้กรอกอีเมล จึงไม่ได้ส่ง)');
+        else if (er.skipped==='not_configured') { /* email off — stay quiet */ }
+        else if (er.error) alert('✅ ยืนยันรับเงินแล้ว แต่ส่งอีเมลไม่สำเร็จ:\n'+er.error);
+      }
+      loadAll();
+    }
     async function cancelReg(id) { if(!confirm('ยกเลิกใบสมัครนี้?'))return; await fetch(`/api/admin/registrations/${id}/cancel`,{method:'POST',headers:H()}); loadAll(); }
 
     function viewSlip(id) {
