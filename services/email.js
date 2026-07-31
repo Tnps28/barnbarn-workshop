@@ -1,25 +1,56 @@
-// services/email.js — ส่งอีเมลยืนยันการชำระเงินให้ผู้สมัคร (Gmail SMTP ฟรี)
-// Uses Gmail SMTP via nodemailer. Set EMAIL_USER (your gmail) and EMAIL_PASS
-// (a Google "App Password", 16 chars) as environment variables.
-// If not configured, sendConfirmationEmail() is a graceful no-op.
+// services/email.js — ส่งอีเมลยืนยันการชำระเงินให้ผู้สมัคร (ฟรี)
+//
+// รองรับ 2 วิธี:
+//  1) Brevo HTTP API (แนะนำ) — ทำงานผ่าน HTTPS จึงไม่ถูกโฮสต์ฟรีบล็อก
+//     ตั้งค่า: BREVO_API_KEY + EMAIL_USER (อีเมลผู้ส่งที่ยืนยันใน Brevo แล้ว)
+//  2) Gmail SMTP (สำรอง) — ใช้ได้เฉพาะโฮสต์ที่เปิดพอร์ต SMTP (Render ฟรีบล็อก)
+//     ตั้งค่า: EMAIL_USER + EMAIL_PASS (Google App Password)
+// ถ้าไม่ตั้งค่าเลย ฟังก์ชันจะไม่ทำอะไร (graceful no-op) ระบบทำงานปกติ
 
 import nodemailer from 'nodemailer';
 
 const EMAIL_USER = (process.env.EMAIL_USER || '').trim();
-// Gmail App Passwords are displayed as "abcd efgh ijkl mnop" — strip ALL
-// whitespace so it works whether or not the user pasted the spaces.
+// Gmail App Passwords are shown as "abcd efgh ijkl mnop" — strip whitespace.
 const EMAIL_PASS = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
 const EMAIL_FROM = process.env.EMAIL_FROM || 'BARNBARN Workshop';
+const BREVO_API_KEY = (process.env.BREVO_API_KEY || '').trim();
 
-export const emailConfigured = () => Boolean(EMAIL_USER && EMAIL_PASS);
+const useBrevo = () => Boolean(BREVO_API_KEY && EMAIL_USER);
+const useSmtp = () => Boolean(EMAIL_USER && EMAIL_PASS);
 
+export const emailConfigured = () => useBrevo() || useSmtp();
+
+// ---- transport 1: Brevo HTTP API ----
+async function sendViaBrevo(to, subject, html, text) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': BREVO_API_KEY,
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: EMAIL_FROM, email: EMAIL_USER },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text
+    })
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo ${res.status}: ${body}`);
+  }
+}
+
+// ---- transport 2: Gmail SMTP (fallback) ----
 let _transporter = null;
 function transporter() {
   if (!_transporter) {
     _transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false,       // STARTTLS on 587 (many hosts block 465)
+      secure: false,
       requireTLS: true,
       auth: { user: EMAIL_USER, pass: EMAIL_PASS },
       connectionTimeout: 20000,
@@ -30,12 +61,25 @@ function transporter() {
   return _transporter;
 }
 
-// Diagnostic: verify SMTP connectivity/auth without sending an email.
+// Unified low-level send: picks Brevo if configured, else SMTP.
+async function deliver(to, subject, html, text) {
+  if (useBrevo()) return sendViaBrevo(to, subject, html, text);
+  await transporter().sendMail({ from: `"${EMAIL_FROM}" <${EMAIL_USER}>`, to, subject, html, text });
+}
+
+// Diagnostic: check connectivity/credentials without sending to a participant.
 export async function verifyEmail() {
   if (!emailConfigured()) return { ok: false, skipped: 'not_configured' };
   try {
+    if (useBrevo()) {
+      const res = await fetch('https://api.brevo.com/v3/account', {
+        headers: { 'api-key': BREVO_API_KEY, accept: 'application/json' }
+      });
+      if (!res.ok) return { ok: false, error: `Brevo ${res.status}: ${await res.text()}` };
+      return { ok: true, transport: 'brevo' };
+    }
     await transporter().verify();
-    return { ok: true };
+    return { ok: true, transport: 'smtp' };
   } catch (e) {
     return { ok: false, error: String(e && e.message ? e.message : e), code: e && e.code };
   }
@@ -45,13 +89,13 @@ export async function verifyEmail() {
 export async function sendTestEmail() {
   if (!emailConfigured()) return { sent: false, skipped: 'not_configured' };
   try {
-    await transporter().sendMail({
-      from: `"${EMAIL_FROM}" <${EMAIL_USER}>`,
-      to: EMAIL_USER,
-      subject: 'BARNBARN — ทดสอบระบบอีเมล ✓',
-      text: 'ระบบอีเมลยืนยัน BARNBARN Workshop ทำงานได้แล้ว 🎉'
-    });
-    return { sent: true };
+    await deliver(
+      EMAIL_USER,
+      'BARNBARN — ทดสอบระบบอีเมล ✓',
+      '<p>ระบบอีเมลยืนยัน <b>BARNBARN Workshop</b> ทำงานได้แล้ว 🎉</p>',
+      'ระบบอีเมลยืนยัน BARNBARN Workshop ทำงานได้แล้ว 🎉'
+    );
+    return { sent: true, transport: useBrevo() ? 'brevo' : 'smtp' };
   } catch (e) {
     return { sent: false, error: String(e && e.message ? e.message : e), code: e && e.code };
   }
@@ -140,17 +184,11 @@ export async function sendConfirmationEmail(reg, workshop, round) {
   if (!reg || !reg.email) return { sent: false, skipped: 'no_email' };
   const { subject, html, text } = buildConfirmationEmail(reg, workshop, round);
   try {
-    await transporter().sendMail({
-      from: `"${EMAIL_FROM}" <${EMAIL_USER}>`,
-      to: reg.email,
-      subject,
-      text,
-      html
-    });
+    await deliver(reg.email, subject, html, text);
     return { sent: true };
   } catch (e) {
     const msg = String(e && e.message ? e.message : e);
-    console.error('📧 EMAIL send error:', msg, '| code:', e && e.code, '| response:', e && e.response);
+    console.error('📧 EMAIL send error:', msg, '| code:', e && e.code);
     return { sent: false, error: msg };
   }
 }
