@@ -14,6 +14,7 @@ const EMAIL_USER = (process.env.EMAIL_USER || '').trim();
 const EMAIL_PASS = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
 const EMAIL_FROM = process.env.EMAIL_FROM || 'BARNBARN Workshop';
 const BREVO_API_KEY = (process.env.BREVO_API_KEY || '').trim();
+const LINE_ADD_FRIEND_URL = (process.env.LINE_ADD_FRIEND_URL || '').trim();
 
 const useBrevo = () => Boolean(BREVO_API_KEY && EMAIL_USER);
 const useSmtp = () => Boolean(EMAIL_USER && EMAIL_PASS);
@@ -160,6 +161,17 @@ export function buildConfirmationEmail(reg, workshop, round) {
         <p style="color:#5b5147;font-size:14px;margin:18px 0 0">
           แล้วพบกันที่เวิร์กช็อปนะคะ ✨ หากมีคำถามเพิ่มเติม ตอบกลับอีเมลนี้ หรือทักเราทาง LINE ได้เลยค่ะ
         </p>
+        ${LINE_ADD_FRIEND_URL ? `
+        <div style="text-align:center;margin:20px 0 4px">
+          <a href="${LINE_ADD_FRIEND_URL}" target="_blank"
+             style="display:inline-block;background:#06c755;color:#fff;text-decoration:none;
+                    font-weight:700;font-size:15px;padding:12px 26px;border-radius:999px">
+            💬 เพิ่มเพื่อน LINE Official
+          </a>
+          <div style="color:#a08a70;font-size:12px;margin-top:8px">
+            แอดไลน์ไว้เพื่อรับข่าวสารและติดต่อผู้จัดได้สะดวก
+          </div>
+        </div>` : ''}
       </div>
       <div style="background:#fbf6ee;padding:14px 24px;color:#a08a70;font-size:12px;text-align:center">
         อีเมลฉบับนี้ส่งอัตโนมัติจากระบบสมัคร BARNBARN Workshop
@@ -172,7 +184,8 @@ export function buildConfirmationEmail(reg, workshop, round) {
     '',
     ...rows.map(([k, v]) => `${k}: ${v}`),
     '',
-    'แล้วพบกันที่เวิร์กช็อปนะคะ 😊'
+    'แล้วพบกันที่เวิร์กช็อปนะคะ 😊',
+    ...(LINE_ADD_FRIEND_URL ? ['', `เพิ่มเพื่อน LINE Official: ${LINE_ADD_FRIEND_URL}`] : [])
   ].join('\n');
 
   return { subject, html, text };
