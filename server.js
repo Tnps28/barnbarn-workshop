@@ -124,9 +124,12 @@ app.get('/api/workshops/:id', (req, res) => {
 
 // ---------- public: register ----------
 app.post('/api/register', (req, res) => {
-  const { workshopId, roundId, name, phone } = req.body || {};
+  const { workshopId, roundId, name, phone, email } = req.body || {};
   if (!workshopId || !roundId || !name || !phone) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อ เบอร์โทร และเลือกรอบให้ครบถ้วน' });
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+    return res.status(400).json({ error: 'กรุณากรอกอีเมลให้ถูกต้อง (สำหรับส่งอีเมลยืนยันการสมัคร)' });
   }
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
