@@ -13,6 +13,7 @@ import {
   paymentConfigured
 } from './services/payment.js';
 import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
+import { sendConfirmationEmail, emailConfigured } from './services/email.js';
 
 // --- load .env (tiny parser, no dependency) ---
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +66,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     paymentConfigured: paymentConfigured(),
     lineConfigured: lineConfigured(),
+    emailConfigured: emailConfigured(),
     omisePublicKey: OMISE_PUBLIC_KEY,
     lineAddFriendUrl: LINE_ADD_FRIEND_URL,
     holdHours: db.holdHours()
@@ -270,10 +272,26 @@ app.get('/api/admin/registrations', requireAdmin, (req, res) => {
 });
 
 // admin marks a registration as paid manually (e.g. bank transfer verified)
-app.post('/api/admin/registrations/:id/mark-paid', requireAdmin, (req, res) => {
+// -> auto-sends a confirmation email to the participant (if EMAIL_* configured & email present)
+app.post('/api/admin/registrations/:id/mark-paid', requireAdmin, async (req, res) => {
   const reg = db.updateRegistration(req.params.id, { status: 'paid' });
   if (!reg) return res.status(404).json({ error: 'not found' });
-  res.json(reg);
+
+  let emailResult = { sent: false };
+  try {
+    const ws = db.getWorkshop(reg.workshopId);
+    const round = roundOf(ws, reg.roundId);
+    emailResult = await sendConfirmationEmail(reg, ws, round);
+    if (emailResult.sent) {
+      db.updateRegistration(reg.id, {
+        confirmationEmailSentAt: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    emailResult = { sent: false, error: String(e && e.message ? e.message : e) };
+  }
+
+  res.json({ ...reg, emailResult });
 });
 
 app.post('/api/admin/registrations/:id/cancel', requireAdmin, (req, res) => {
