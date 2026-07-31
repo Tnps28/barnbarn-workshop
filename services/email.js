@@ -17,11 +17,44 @@ let _transporter = null;
 function transporter() {
   if (!_transporter) {
     _transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: EMAIL_USER, pass: EMAIL_PASS }
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,       // STARTTLS on 587 (many hosts block 465)
+      requireTLS: true,
+      auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 25000
     });
   }
   return _transporter;
+}
+
+// Diagnostic: verify SMTP connectivity/auth without sending an email.
+export async function verifyEmail() {
+  if (!emailConfigured()) return { ok: false, skipped: 'not_configured' };
+  try {
+    await transporter().verify();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e), code: e && e.code };
+  }
+}
+
+// Diagnostic: send a test email to the owner's own address (EMAIL_USER).
+export async function sendTestEmail() {
+  if (!emailConfigured()) return { sent: false, skipped: 'not_configured' };
+  try {
+    await transporter().sendMail({
+      from: `"${EMAIL_FROM}" <${EMAIL_USER}>`,
+      to: EMAIL_USER,
+      subject: 'BARNBARN — ทดสอบระบบอีเมล ✓',
+      text: 'ระบบอีเมลยืนยัน BARNBARN Workshop ทำงานได้แล้ว 🎉'
+    });
+    return { sent: true };
+  } catch (e) {
+    return { sent: false, error: String(e && e.message ? e.message : e), code: e && e.code };
+  }
 }
 
 const money = (n) => Number(n || 0).toLocaleString('th-TH');
