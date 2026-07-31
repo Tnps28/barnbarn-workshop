@@ -13,7 +13,7 @@ import {
   paymentConfigured
 } from './services/payment.js';
 import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
-import { sendConfirmationEmail, emailConfigured, verifyEmail, sendTestEmail } from './services/email.js';
+import { sendConfirmationEmail, emailConfigured } from './services/email.js';
 
 // --- load .env (tiny parser, no dependency) ---
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -109,14 +109,6 @@ app.get('/api/my-registrations', (req, res) => {
     };
   });
   res.json({ count: out.length, registrations: out });
-});
-
-// ---------- diagnostic: email connectivity self-test (temporary) ----------
-app.get('/api/email-test', async (req, res) => {
-  const verify = await verifyEmail();
-  let send = { skipped: 'verify_failed' };
-  if (verify.ok || req.query.force) send = await sendTestEmail();
-  res.json({ emailConfigured: emailConfigured(), verify, send });
 });
 
 // ---------- public: workshops ----------
