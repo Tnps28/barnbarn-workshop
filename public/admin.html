@@ -26,6 +26,7 @@
 
   <!-- APP -->
   <main class="wrap hidden" id="app">
+    <div id="focus-banner"></div>
     <div class="stat-grid" id="stats"></div>
     <div id="storage" style="margin-bottom:18px"></div>
 
@@ -36,7 +37,7 @@
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
 
-    <h2 class="section-title">เวิร์กช็อปทั้งหมด</h2>
+    <h2 class="section-title" id="ws-heading">เวิร์กช็อปทั้งหมด</h2>
     <div id="ws-list" class="grid"></div>
 
     <h2 class="section-title" style="margin-top:36px">รายชื่อผู้สมัคร</h2>
@@ -162,7 +163,7 @@
     const H = () => ({ 'Content-Type':'application/json', 'x-admin-password': PW });
     const money = (n) => Number(n).toLocaleString('th-TH');
     const fmtDate = (d) => { if(!d) return ''; try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});} catch { return d; } };
-    let WORKSHOPS = [], REGS = [], CFG = {};
+    let WORKSHOPS = [], REGS = [], CFG = {}, S = {}, FILTER_WS = '';
 
     async function login() {
       PW = document.getElementById('pw').value;
@@ -181,24 +182,71 @@
         fetch('/api/admin/summary', { headers: H() })
       ]);
       WORKSHOPS = await wRes.json();
-      const s = await sRes.json();
-      const aw = s.awaitingVerification || 0;
-      document.getElementById('stats').innerHTML = `
-        ${stat(s.totalRegistrations,'ผู้สมัครทั้งหมด')}
-        ${stat(s.pendingPayment,'รอชำระเงิน')}
-        ${stat(aw,'แจ้งโอน รอตรวจสอบ', aw>0)}
-        ${stat(s.paid,'ชำระแล้ว รอยืนยัน')}
-        ${stat(s.confirmed,'ยืนยันแล้ว')}
-        ${stat(s.attended||0,'เช็คอินแล้ว')}
-        ${stat(s.waitlist||0,'คิวสำรอง')}
-        ${stat(money(s.revenue)+' ฿','ยอดรับชำระ')}`;
-      renderStorage(s.storage);
-      renderWorkshops();
+      S = await sRes.json();
       await Promise.all([loadRegs(), loadWaitlist()]);
+      renderStats();
+      renderStorage(S.storage);
+      renderWorkshops();
+      renderBanner();
+      applyFocusUI();
       // auto-refresh every 60s so new slips/registrations appear without manual refresh
       if (!AUTO) AUTO = setInterval(loadAll, 60000);
     }
     const stat = (n,l,alert) => `<div class="stat" style="${alert?'border-color:var(--danger);background:#fdeee9':''}"><div class="n" style="${alert?'color:var(--danger)':''}">${n}${alert?' 🔴':''}</div><div class="l">${l}</div></div>`;
+
+    // stats: use global summary, or compute for the focused workshop from loaded data
+    function renderStats() {
+      let s = S;
+      if (FILTER_WS) {
+        const rs = REGS.filter(r => r.workshopId === FILTER_WS);
+        s = {
+          totalRegistrations: rs.filter(r => r.status !== 'expired').length,
+          pendingPayment: rs.filter(r => r.status === 'pending_payment').length,
+          awaitingVerification: rs.filter(r => r.status === 'awaiting_verification').length,
+          paid: rs.filter(r => r.status === 'paid').length,
+          confirmed: rs.filter(r => r.status === 'confirmed').length,
+          attended: rs.filter(r => r.attended).length,
+          waitlist: WAIT.filter(w => w.workshopId === FILTER_WS).length,
+          revenue: rs.filter(r => r.status === 'paid' || r.status === 'confirmed').reduce((a, r) => a + Number(r.amount || 0), 0)
+        };
+      }
+      const aw = s.awaitingVerification || 0;
+      document.getElementById('stats').innerHTML = `
+        ${stat(s.totalRegistrations || 0,'ผู้สมัครทั้งหมด')}
+        ${stat(s.pendingPayment || 0,'รอชำระเงิน')}
+        ${stat(aw,'แจ้งโอน รอตรวจสอบ', aw>0)}
+        ${stat(s.paid || 0,'ชำระแล้ว รอยืนยัน')}
+        ${stat(s.confirmed || 0,'ยืนยันแล้ว')}
+        ${stat(s.attended||0,'เช็คอินแล้ว')}
+        ${stat(s.waitlist||0,'คิวสำรอง')}
+        ${stat(money(s.revenue||0)+' ฿','ยอดรับชำระ')}`;
+    }
+
+    // ----- per-workshop focus -----
+    function renderBanner() {
+      const el = document.getElementById('focus-banner');
+      if (!FILTER_WS) { el.innerHTML = ''; return; }
+      const w = WORKSHOPS.find(x => x.id === FILTER_WS);
+      el.innerHTML = `<div class="panel" style="padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-color:var(--blue)">
+        <div><span style="font-size:13px;color:var(--blue)">📂 กำลังดูเฉพาะเวิร์กช็อป</span><br><b style="color:var(--brown);font-size:18px">${w?w.title:'(เวิร์กช็อป)'}</b>
+        ${w?`<div class="muted" style="font-size:12px;margin-top:2px">${w.rounds.map(r=>fmtDate(r.date)+' '+r.time+' · '+r.taken+'/'+r.seats+' ที่').join(' | ')}</div>`:''}</div>
+        <button class="btn btn-ghost btn-sm" onclick="clearFocus()">← กลับดูทั้งหมด</button>
+      </div>`;
+    }
+    function applyFocusUI() {
+      const hide = FILTER_WS ? 'none' : '';
+      document.getElementById('ws-heading').style.display = hide;
+      document.getElementById('ws-list').style.display = hide;
+    }
+    function focusWorkshop(id) {
+      FILTER_WS = id;
+      renderStats(); renderRegs(); renderWaitlist(); renderBanner(); applyFocusUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function clearFocus() {
+      FILTER_WS = '';
+      renderStats(); renderRegs(); renderWaitlist(); renderBanner(); applyFocusUI();
+    }
     function renderStorage(st) {
       const el = document.getElementById('storage');
       if (!st || !st.available) { el.innerHTML = ''; return; }
@@ -229,6 +277,7 @@
           <h3>${w.title}</h3>
           <div class="rounds">${w.rounds.map(r=>`📅 ${fmtDate(r.date)} · ${r.time} · <b>${r.taken}/${r.seats}</b> ที่ · ${money(r.price)}฿`).join('<br>')||'<span class="muted">ยังไม่มีรอบ</span>'}</div>
           <div class="foot" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-blue btn-sm" onclick="focusWorkshop('${w.id}')">📂 ดูข้อมูล</button>
             <button class="btn btn-ghost btn-sm" onclick="openWorkshop('${w.id}')">แก้ไข</button>
             <button class="btn btn-ghost btn-sm" onclick="dupWorkshop('${w.id}')">📑 ทำซ้ำ</button>
             <button class="btn btn-ghost btn-sm" onclick="delWorkshop('${w.id}')" style="color:var(--danger);border-color:var(--danger)">ลบ</button>
@@ -244,7 +293,8 @@
       const f = document.getElementById('filter-status').value;
       const q = (document.getElementById('reg-search').value||'').trim().toLowerCase();
       const qd = q.replace(/\D/g,'');
-      let list = f ? REGS.filter(r=>r.status===f) : REGS;
+      let list = FILTER_WS ? REGS.filter(r=>r.workshopId===FILTER_WS) : REGS;
+      if (f) list = list.filter(r=>r.status===f);
       if (q) list = list.filter(r => (r.name||'').toLowerCase().includes(q) || (qd && (r.phone||'').replace(/\D/g,'').includes(qd)));
       const statusPill = (s) => ({
         pending_payment:'<span class="pill pending">รอชำระ</span>',
@@ -274,7 +324,11 @@
     let WAIT = [];
     async function loadWaitlist() {
       WAIT = await (await fetch('/api/admin/waitlist', { headers: H() })).json();
-      document.getElementById('wait-body').innerHTML = WAIT.map(w => `
+      renderWaitlist();
+    }
+    function renderWaitlist() {
+      const list = FILTER_WS ? WAIT.filter(w=>w.workshopId===FILTER_WS) : WAIT;
+      document.getElementById('wait-body').innerHTML = list.map(w => `
         <tr>
           <td><b>${w.name}</b></td>
           <td>${w.phone}</td>
@@ -335,14 +389,15 @@
     }
 
     function exportExcel() {
-      if (!REGS.length) { alert('ยังไม่มีข้อมูลผู้สมัครให้ดาวน์โหลด'); return; }
+      const SRC = FILTER_WS ? REGS.filter(r=>r.workshopId===FILTER_WS) : REGS;
+      if (!SRC.length) { alert('ยังไม่มีข้อมูลผู้สมัครให้ดาวน์โหลด'); return; }
       const statusTxt = {
         pending_payment:'รอชำระเงิน', awaiting_verification:'แจ้งโอนแล้ว-รอตรวจสอบ',
         paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก', expired:'หมดเวลา-ปล่อยที่นั่ง'
       };
       const esc = (v) => `"${String(v==null?'':v).replace(/"/g,'""')}"`;
       const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
-      const rows = REGS.map(r => [
+      const rows = SRC.map(r => [
         r.createdAt ? new Date(r.createdAt).toLocaleString('th-TH') : '',
         r.name, r.phone, r.lineId||'', r.email||'',
         r.workshopTitle,
@@ -356,10 +411,10 @@
       ].map(esc).join(','));
       // summary block at top
       const s = {
-        total: REGS.length,
-        confirmed: REGS.filter(r=>r.status==='confirmed').length,
-        paid: REGS.filter(r=>r.status==='paid').length,
-        revenue: REGS.filter(r=>r.status==='paid'||r.status==='confirmed').reduce((a,r)=>a+Number(r.amount||0),0)
+        total: SRC.length,
+        confirmed: SRC.filter(r=>r.status==='confirmed').length,
+        paid: SRC.filter(r=>r.status==='paid').length,
+        revenue: SRC.filter(r=>r.status==='paid'||r.status==='confirmed').reduce((a,r)=>a+Number(r.amount||0),0)
       };
       const summary = [
         ['สรุป BARNBARN Workshop','ณ วันที่',new Date().toLocaleString('th-TH')].map(esc).join(','),
@@ -373,7 +428,8 @@
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'barnbarn-registrations-' + new Date().toISOString().slice(0,10) + '.csv';
+      const wsTag = FILTER_WS ? ('-' + ((WORKSHOPS.find(w=>w.id===FILTER_WS)||{}).title||'').replace(/[\\/:*?"<>|\s]+/g,'_')) : '';
+      a.download = 'barnbarn-registrations' + wsTag + '-' + new Date().toISOString().slice(0,10) + '.csv';
       a.click();
       URL.revokeObjectURL(a.href);
     }
@@ -383,7 +439,7 @@
       let er = null; try { er = (await res.json()).emailResult; } catch(e){}
       if (er) {
         if (er.sent) alert('✅ ยืนยันรับเงินแล้ว และส่งอีเมลยืนยันให้ผู้สมัครเรียบร้อย 📧');
-        else if (er.skipped==='no_email') alert('✅ ยืนยันรับเงินแล้ว (ผู้สมัครไม่ได้กรอกอีเมล จึงไม่ได้ส่ง)');
+        else if (er.skipped==='no_email') alert('✅ ยืนยันรับเงินแล้ว\n(ผู้สมัครไม่ได้กรอกอีเมล — ใช้ปุ่ม “ส่งยืนยัน LINE” เพื่อยืนยันผ่าน LINE OA แทนได้)');
         else if (er.skipped==='not_configured') { /* email off — stay quiet */ }
         else if (er.error) alert('✅ ยืนยันรับเงินแล้ว แต่ส่งอีเมลไม่สำเร็จ:\n'+er.error);
       }

@@ -170,8 +170,8 @@
             <div id="err"></div>
             <div class="field"><label>ชื่อ-นามสกุล <span class="req">*</span></label><input id="name" placeholder="เช่น สมหญิง ใจดี"></div>
             <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>
-            <div class="field"><label>อีเมล <span class="req">*</span></label><input id="email" type="email" placeholder="you@email.com"><div class="hint">ใช้สำหรับส่งอีเมลยืนยันการสมัคร</div></div>
-            <div class="field"><label>LINE ID / ชื่อบน LINE</label><input id="lineId" placeholder="@lineid หรือชื่อของคุณ"><div class="hint">เพื่อให้เราส่งข้อความยืนยันหาคุณได้</div></div>
+            <div class="field"><label>อีเมล</label><input id="email" type="email" placeholder="you@email.com"><div class="hint">ใช้ส่งอีเมลยืนยันการสมัคร (ถ้าไม่กรอก กรุณาใส่ LINE ID เพื่อรับยืนยันทาง LINE OA แทน)</div></div>
+            <div class="field"><label>LINE ID / ชื่อบน LINE</label><input id="lineId" placeholder="@lineid หรือชื่อของคุณ"><div class="hint">ใช้ยืนยันการสมัครผ่าน LINE OA (จำเป็นถ้าไม่ได้กรอกอีเมล)</div></div>
 
             <div class="field">
               <label>การแพ้อาหาร</label>
@@ -227,8 +227,8 @@
         note: val('note')
       };
       if (!body.name || !body.phone) { showErr('กรุณากรอกชื่อและเบอร์โทรศัพท์'); return; }
-      if (!body.email) { showErr('กรุณากรอกอีเมล (สำหรับส่งอีเมลยืนยันการสมัคร)'); return; }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { showErr('รูปแบบอีเมลไม่ถูกต้อง'); return; }
+      if (body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { showErr('รูปแบบอีเมลไม่ถูกต้อง'); return; }
+      if (!body.email && !body.lineId) { showErr('กรุณากรอกอีเมล หรือ LINE ID อย่างน้อย 1 ช่อง (เพื่อรับการยืนยันการสมัคร)'); return; }
       if (document.querySelector('input[name="allergy-has"]:checked').value === 'yes' && !body.allergy) { showErr('กรุณาระบุอาหารที่แพ้ หรือเลือก “ไม่มี”'); return; }
       if (document.querySelector('input[name="medical-has"]:checked').value === 'yes' && !body.medical) { showErr('กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”'); return; }
       const res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
