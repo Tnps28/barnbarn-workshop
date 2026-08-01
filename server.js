@@ -132,7 +132,7 @@ app.post('/api/register', (req, res) => {
     return res.status(400).json({ error: 'รูปแบบอีเมลไม่ถูกต้อง' });
   }
   if (!email && !String(req.body.lineId || '').trim()) {
-    return res.status(400).json({ error: 'กรุณากรอกอีเมล หรือ LINE ID อย่างน้อย 1 ช่อง (เพื่อรับการยืนยันการสมัคร)' });
+    return res.status(400).json({ error: 'กรุณากรอกอีเมล หรือ ชื่อ LINE อย่างน้อย 1 อย่าง (เพื่อรับการยืนยันการสมัคร)' });
   }
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
