@@ -128,8 +128,11 @@ app.post('/api/register', (req, res) => {
   if (!workshopId || !roundId || !name || !phone) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อ เบอร์โทร และเลือกรอบให้ครบถ้วน' });
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
-    return res.status(400).json({ error: 'กรุณากรอกอีเมลให้ถูกต้อง (สำหรับส่งอีเมลยืนยันการสมัคร)' });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+    return res.status(400).json({ error: 'รูปแบบอีเมลไม่ถูกต้อง' });
+  }
+  if (!email && !String(req.body.lineId || '').trim()) {
+    return res.status(400).json({ error: 'กรุณากรอกอีเมล หรือ LINE ID อย่างน้อย 1 ช่อง (เพื่อรับการยืนยันการสมัคร)' });
   }
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
