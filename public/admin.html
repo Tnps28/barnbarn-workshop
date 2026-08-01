@@ -37,11 +37,11 @@
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
 
-    <h2 class="section-title" id="ws-heading">เวิร์กช็อปทั้งหมด</h2>
+    <h2 class="section-title" id="ws-heading">เลือกเวิร์กช็อป <span class="muted" style="font-weight:400;font-size:14px">— กด “📂 ดูข้อมูล” เพื่อดูภาพรวมและรายชื่อผู้สมัครของแต่ละกิจกรรม</span></h2>
     <div id="ws-list" class="grid"></div>
 
-    <h2 class="section-title" style="margin-top:36px">รายชื่อผู้สมัคร</h2>
-    <div class="panel" style="padding:8px;overflow:auto">
+    <h2 class="section-title" id="reg-heading" style="margin-top:36px">รายชื่อผู้สมัคร</h2>
+    <div class="panel" id="reg-section" style="padding:8px;overflow:auto">
       <div style="padding:8px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <input id="reg-search" placeholder="🔎 ค้นหา ชื่อ / เบอร์" oninput="renderRegs()" style="max-width:220px">
         <select id="filter-status" onchange="renderRegs()" style="max-width:220px">
@@ -60,8 +60,8 @@
       </table>
     </div>
 
-    <h2 class="section-title" style="margin-top:36px">🔔 คิวสำรอง (Waitlist)</h2>
-    <div class="panel" style="padding:8px;overflow:auto">
+    <h2 class="section-title" id="wait-heading" style="margin-top:36px">🔔 คิวสำรอง (Waitlist)</h2>
+    <div class="panel" id="wait-section" style="padding:8px;overflow:auto">
       <table>
         <thead><tr><th>ชื่อ</th><th>เบอร์โทร</th><th>เวิร์กช็อป / รอบ</th><th>วันที่ขอคิว</th><th></th></tr></thead>
         <tbody id="wait-body"></tbody>
@@ -234,9 +234,18 @@
       </div>`;
     }
     function applyFocusUI() {
-      const hide = FILTER_WS ? 'none' : '';
-      document.getElementById('ws-heading').style.display = hide;
-      document.getElementById('ws-list').style.display = hide;
+      const focused = !!FILTER_WS;
+      // Landing = workshop picker only. Per-workshop data appears after selecting one.
+      document.getElementById('ws-heading').style.display = focused ? 'none' : '';
+      document.getElementById('ws-list').style.display = focused ? 'none' : '';
+      const perWs = focused ? '' : 'none';
+      document.getElementById('stats').style.display = perWs;
+      document.getElementById('reg-heading').style.display = perWs;
+      document.getElementById('reg-section').style.display = perWs;
+      document.getElementById('wait-heading').style.display = perWs;
+      document.getElementById('wait-section').style.display = perWs;
+      // global DB-usage bar: show on landing (overall), hide inside a single workshop
+      document.getElementById('storage').style.display = focused ? 'none' : '';
     }
     function focusWorkshop(id) {
       FILTER_WS = id;
@@ -268,7 +277,11 @@
     }
 
     function renderWorkshops() {
-      document.getElementById('ws-list').innerHTML = WORKSHOPS.map(w => `
+      document.getElementById('ws-list').innerHTML = WORKSHOPS.map(w => {
+        const rs = REGS.filter(r => r.workshopId === w.id);
+        const aw = rs.filter(r => r.status === 'awaiting_verification').length;
+        const active = rs.filter(r => r.status !== 'expired' && r.status !== 'cancelled').length;
+        return `
         <div class="card"><div class="body">
           <div style="display:flex;justify-content:space-between;align-items:start">
             <span class="tag">${w.active?'เปิดรับ':'ปิดอยู่'}</span>
@@ -276,13 +289,15 @@
           </div>
           <h3>${w.title}</h3>
           <div class="rounds">${w.rounds.map(r=>`📅 ${fmtDate(r.date)} · ${r.time} · <b>${r.taken}/${r.seats}</b> ที่ · ${money(r.price)}฿`).join('<br>')||'<span class="muted">ยังไม่มีรอบ</span>'}</div>
+          <div style="font-size:13px;margin-top:8px;color:var(--brown)">👥 ผู้สมัคร <b>${active}</b> คน${aw?` · <b style="color:var(--danger)">🔴 แจ้งโอนรอตรวจ ${aw}</b>`:''}</div>
           <div class="foot" style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-blue btn-sm" onclick="focusWorkshop('${w.id}')">📂 ดูข้อมูล</button>
             <button class="btn btn-ghost btn-sm" onclick="openWorkshop('${w.id}')">แก้ไข</button>
             <button class="btn btn-ghost btn-sm" onclick="dupWorkshop('${w.id}')">📑 ทำซ้ำ</button>
             <button class="btn btn-ghost btn-sm" onclick="delWorkshop('${w.id}')" style="color:var(--danger);border-color:var(--danger)">ลบ</button>
           </div>
-        </div></div>`).join('') || '<p class="muted">ยังไม่มีเวิร์กช็อป กด “เพิ่มเวิร์กช็อปใหม่” เพื่อเริ่ม</p>';
+        </div></div>`;
+      }).join('') || '<p class="muted">ยังไม่มีเวิร์กช็อป กด “เพิ่มเวิร์กช็อปใหม่” เพื่อเริ่ม</p>';
     }
 
     async function loadRegs() {
