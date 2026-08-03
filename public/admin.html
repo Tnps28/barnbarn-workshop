@@ -145,6 +145,7 @@
       <input type="hidden" id="er-id">
       <div class="field"><label>ชื่อ-นามสกุล</label><input id="er-name"></div>
       <div class="field"><label>เบอร์โทรศัพท์</label><input id="er-phone"></div>
+      <div class="field"><label>จังหวัด</label><select id="er-province"></select></div>
       <div class="field"><label>รอบ</label><select id="er-round"></select></div>
       <div class="field"><label>จำนวน (ท่าน)</label><input id="er-people" type="number" min="1"></div>
       <div class="field"><label>การแพ้อาหาร</label><input id="er-allergy" placeholder="ว่าง = ไม่มี"></div>
@@ -164,6 +165,7 @@
     const money = (n) => Number(n).toLocaleString('th-TH');
     const fmtDate = (d) => { if(!d) return ''; try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});} catch { return d; } };
     let WORKSHOPS = [], REGS = [], CFG = {}, S = {}, FILTER_WS = '';
+    const PROVINCES = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
 
     async function login() {
       PW = document.getElementById('pw').value;
@@ -321,7 +323,7 @@
       }[s]||s);
       document.getElementById('reg-body').innerHTML = list.map(r => `
         <tr>
-          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}</td>
+          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}</td>
           <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}</td>
           <td>${money(r.amount)} ฿</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
@@ -364,6 +366,7 @@
       document.getElementById('er-id').value = r.id;
       document.getElementById('er-name').value = r.name||'';
       document.getElementById('er-phone').value = r.phone||'';
+      document.getElementById('er-province').innerHTML = '<option value="">— เลือกจังหวัด —</option>' + PROVINCES.map(p=>`<option value="${p}" ${p===r.province?'selected':''}>${p}</option>`).join('');
       document.getElementById('er-people').value = r.people||1;
       document.getElementById('er-allergy').value = r.allergy||'';
       document.getElementById('er-medical').value = r.medical||'';
@@ -376,6 +379,7 @@
       const id = document.getElementById('er-id').value;
       const body = {
         name: v('er-name'), phone: v('er-phone'),
+        province: document.getElementById('er-province').value,
         roundId: document.getElementById('er-round').value,
         people: Number(document.getElementById('er-people').value)||1,
         allergy: v('er-allergy'), medical: v('er-medical'),
@@ -411,10 +415,10 @@
         paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก', expired:'หมดเวลา-ปล่อยที่นั่ง'
       };
       const esc = (v) => `"${String(v==null?'':v).replace(/"/g,'""')}"`;
-      const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
+      const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','จังหวัด','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
       const rows = SRC.map(r => [
         r.createdAt ? new Date(r.createdAt).toLocaleString('th-TH') : '',
-        r.name, r.phone, r.lineId||'', r.email||'',
+        r.name, r.phone, r.province||'', r.lineId||'', r.email||'',
         r.workshopTitle,
         r.round ? (fmtDate(r.round.date)+' '+r.round.time) : '',
         r.people,
