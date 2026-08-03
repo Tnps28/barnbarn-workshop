@@ -363,6 +363,7 @@ export function createRegistration(payload) {
     phone: payload.phone,
     email: payload.email || '',
     lineId: payload.lineId || '',
+    province: payload.province || '',
     people: Number(payload.people) || 1,
     allergy: payload.allergy || '',
     medical: payload.medical || '',

@@ -134,6 +134,9 @@ app.post('/api/register', (req, res) => {
   if (!email && !String(req.body.lineId || '').trim()) {
     return res.status(400).json({ error: 'กรุณากรอกอีเมล หรือ ชื่อ LINE อย่างน้อย 1 อย่าง (เพื่อรับการยืนยันการสมัคร)' });
   }
+  if (!String(req.body.province || '').trim()) {
+    return res.status(400).json({ error: 'กรุณาเลือกจังหวัด' });
+  }
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
   if (!ws || !round) return res.status(404).json({ error: 'ไม่พบเวิร์กช็อปหรือรอบที่เลือก' });
@@ -157,6 +160,7 @@ app.post('/api/register', (req, res) => {
     phone,
     email: req.body.email,
     lineId: req.body.lineId,
+    province: req.body.province,
     people,
     allergy: req.body.allergy,
     medical: req.body.medical,
@@ -344,6 +348,7 @@ app.put('/api/admin/registrations/:id/edit', requireAdmin, (req, res) => {
     phone: b.phone ?? reg.phone,
     email: b.email ?? reg.email,
     lineId: b.lineId ?? reg.lineId,
+    province: b.province ?? reg.province,
     allergy: b.allergy ?? reg.allergy,
     medical: b.medical ?? reg.medical,
     note: b.note ?? reg.note,
