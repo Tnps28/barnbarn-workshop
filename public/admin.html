@@ -78,7 +78,11 @@
       <div class="field"><label>หมวดหมู่</label><input id="f-category" placeholder="งานคราฟต์ / Craft"></div>
       <div class="field"><label>รายละเอียด</label><textarea id="f-desc" placeholder="สิ่งที่จะได้เรียนรู้ อุปกรณ์ที่แถม ฯลฯ"></textarea></div>
       <div class="field"><label>สถานที่</label><input id="f-location" placeholder="BARNBARN Studio ..."></div>
-      <div class="field"><label>ลิงก์รูปภาพ (ไม่บังคับ)</label><input id="f-image" placeholder="https://..."></div>
+      <div class="field"><label>รูปปกเวิร์กช็อป (ไม่บังคับ)</label>
+        <input type="file" id="f-image-file" accept="image/*" onchange="onWsImage(event)">
+        <div class="hint">อัปโหลดรูปที่จะแสดงเป็นปกบนหน้าเว็บ (ระบบย่อขนาดให้อัตโนมัติ)</div>
+        <div id="f-image-preview"></div>
+      </div>
 
       <label style="font-weight:700;color:var(--brown)">รอบ (วันที่ · เวลา · ที่นั่ง · ราคา)</label>
       <div id="rounds-wrap"></div>
@@ -398,7 +402,7 @@
       document.getElementById('f-category').value = w.category||'';
       document.getElementById('f-desc').value = w.description||'';
       document.getElementById('f-location').value = w.location||'';
-      document.getElementById('f-image').value = w.image||'';
+      WS_IMG = w.image||''; showWsImagePreview();
       document.getElementById('addons-wrap').innerHTML='';
       (w.addons||[]).forEach(addAddonRow);
       // rounds: keep time/seats/price but clear dates (new dates for the new run)
@@ -533,6 +537,25 @@
     }
     function copyMsg(){ const t=document.getElementById('cmsg'); t.select(); document.execCommand('copy'); }
 
+    // ----- workshop cover image (upload) -----
+    let WS_IMG = '';
+    async function onWsImage(e) {
+      const f = e.target.files[0]; if (!f) return;
+      WS_IMG = await resizeImage(f, 1000, 0.82);
+      showWsImagePreview();
+    }
+    function clearWsImage() {
+      WS_IMG = '';
+      const fi = document.getElementById('f-image-file'); if (fi) fi.value = '';
+      showWsImagePreview();
+    }
+    function showWsImagePreview() {
+      const p = document.getElementById('f-image-preview'); if (!p) return;
+      p.innerHTML = WS_IMG
+        ? `<div style="margin-top:8px"><img src="${WS_IMG}" style="max-height:150px;border-radius:10px;border:1px solid var(--line);display:block"><button class="btn btn-ghost btn-sm mt" onclick="clearWsImage()" style="color:var(--danger)">ลบรูปปก</button></div>`
+        : '';
+    }
+
     // ----- workshop modal -----
     function openWorkshop(id) {
       const w = id ? WORKSHOPS.find(x=>x.id===id) : null;
@@ -543,7 +566,7 @@
       document.getElementById('f-category').value = w?.category || '';
       document.getElementById('f-desc').value = w?.description || '';
       document.getElementById('f-location').value = w?.location || '';
-      document.getElementById('f-image').value = w?.image || '';
+      WS_IMG = w?.image || ''; showWsImagePreview();
       document.getElementById('f-active').checked = w ? w.active : true;
       document.getElementById('rounds-wrap').innerHTML = '';
       (w?.rounds?.length ? w.rounds : [{}]).forEach(addRoundRow);
@@ -586,7 +609,7 @@
       const id = document.getElementById('ws-id').value;
       const payload = {
         title: v('f-title'), subtitle: v('f-subtitle'), category: v('f-category'),
-        description: v('f-desc'), location: v('f-location'), image: v('f-image'),
+        description: v('f-desc'), location: v('f-location'), image: WS_IMG,
         active: document.getElementById('f-active').checked, rounds: collectRounds(), addons: collectAddons()
       };
       if (!payload.title) return alert('กรุณาใส่ชื่อเวิร์กช็อป');
