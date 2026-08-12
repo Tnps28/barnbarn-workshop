@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ผู้ดูแลระบบ — BARNBARN Workshop</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="logo">🌿</span> BARNBARN · ผู้ดูแล</div>
+    <a class="plain" href="/">ดูหน้าเว็บผู้สมัคร ▸</a>
+  </nav>
+
+  <!-- LOGIN -->
+  <main class="wrap" id="login">
+    <div class="panel" style="max-width:420px;margin:40px auto">
+      <h2 style="color:var(--brown);margin-top:0">เข้าสู่ระบบผู้ดูแล</h2>
+      <div id="login-err"></div>
+      <div class="field"><label>รหัสผ่าน</label><input id="pw" type="password" placeholder="รหัสผ่านผู้ดูแล"></div>
+      <button class="btn btn-primary block" onclick="login()">เข้าสู่ระบบ</button>
+    </div>
+  </main>
+
+  <!-- APP -->
+  <main class="wrap hidden" id="app">
+    <div id="focus-banner"></div>
+    <div class="stat-grid" id="stats"></div>
+    <div id="storage" style="margin-bottom:18px"></div>
+
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
+      <button class="btn btn-yellow" onclick="openPaymentSettings()">🏦 ตั้งค่าการชำระเงิน (QR/บัญชี)</button>
+      <button class="btn btn-blue" onclick="exportExcel()">⬇️ ดาวน์โหลด Excel</button>
+      <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
+    </div>
+
+    <h2 class="section-title" id="ws-heading">เลือกเวิร์กช็อป <span class="muted" style="font-weight:400;font-size:14px">— กด “📂 ดูข้อมูล” เพื่อดูภาพรวมและรายชื่อผู้สมัครของแต่ละกิจกรรม</span></h2>
+    <div id="ws-list" class="grid"></div>
+
+    <h2 class="section-title" id="reg-heading" style="margin-top:36px">รายชื่อผู้สมัคร</h2>
+    <div class="panel" id="reg-section" style="padding:8px;overflow:auto">
+      <div style="padding:8px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input id="reg-search" placeholder="🔎 ค้นหา ชื่อ / เบอร์" oninput="renderRegs()" style="max-width:220px">
+        <select id="filter-status" onchange="renderRegs()" style="max-width:220px">
+          <option value="">ทุกสถานะ</option>
+          <option value="pending_payment">รอชำระเงิน</option>
+          <option value="awaiting_verification">แจ้งโอนแล้ว (รอตรวจสอบ)</option>
+          <option value="paid">ชำระแล้ว (รอยืนยัน)</option>
+          <option value="confirmed">ยืนยันแล้ว</option>
+          <option value="cancelled">ยกเลิก</option>
+          <option value="expired">หมดเวลา (ปล่อยที่นั่งแล้ว)</option>
+        </select>
+      </div>
+      <table>
+        <thead><tr><th>ผู้สมัคร</th><th>เวิร์กช็อป / รอบ</th><th>ยอด</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody id="reg-body"></tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title" id="wait-heading" style="margin-top:36px">🔔 คิวสำรอง (Waitlist)</h2>
+    <div class="panel" id="wait-section" style="padding:8px;overflow:auto">
+      <table>
+        <thead><tr><th>ชื่อ</th><th>เบอร์โทร</th><th>เวิร์กช็อป / รอบ</th><th>วันที่ขอคิว</th><th></th></tr></thead>
+        <tbody id="wait-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- WORKSHOP MODAL -->
+  <div class="modal-bg" id="ws-modal">
+    <div class="modal">
+      <h3 id="ws-modal-title">เพิ่มเวิร์กช็อป</h3>
+      <input type="hidden" id="ws-id">
+      <div class="field"><label>ชื่อเวิร์กช็อป <span class="req">*</span></label><input id="f-title" placeholder="เช่น เวิร์กช็อปทำเทียนหอม"></div>
+      <div class="field"><label>ชื่อรอง (อังกฤษ)</label><input id="f-subtitle" placeholder="Scented Candle Making"></div>
+      <div class="field"><label>หมวดหมู่</label><input id="f-category" placeholder="งานคราฟต์ / Craft"></div>
+      <div class="field"><label>รายละเอียด</label><textarea id="f-desc" placeholder="สิ่งที่จะได้เรียนรู้ อุปกรณ์ที่แถม ฯลฯ"></textarea></div>
+      <div class="field"><label>สถานที่</label><input id="f-location" placeholder="BARNBARN Studio ..."></div>
+      <div class="field"><label>รูปปกเวิร์กช็อป (ไม่บังคับ)</label>
+        <input type="file" id="f-image-file" accept="image/*" onchange="onWsImage(event)">
+        <div class="hint">อัปโหลดรูปที่จะแสดงเป็นปกบนหน้าเว็บ (ระบบย่อขนาดให้อัตโนมัติ)</div>
+        <div id="f-image-preview"></div>
+      </div>
+
+      <label style="font-weight:700;color:var(--brown)">รอบ (วันที่ · เวลา · ที่นั่ง · ราคา)</label>
+      <div id="rounds-wrap"></div>
+      <button class="btn btn-ghost btn-sm mt" onclick="addRoundRow()">➕ เพิ่มรอบ</button>
+
+      <label style="font-weight:700;color:var(--brown);display:block;margin-top:16px">อุปกรณ์พิเศษ (ตัวเลือกเสริม)</label>
+      <div class="hint" style="margin-bottom:8px">ผู้สมัครเลือกได้ว่าจะรับและจ่ายเพิ่มหรือไม่ เช่น “ชุดอุปกรณ์กลับบ้าน +300”</div>
+      <div id="addons-wrap"></div>
+      <button class="btn btn-ghost btn-sm mt" onclick="addAddonRow()">➕ เพิ่มอุปกรณ์พิเศษ</button>
+
+      <div class="field mt"><label><input type="checkbox" id="f-active" checked style="width:auto"> เปิดรับสมัคร (แสดงบนหน้าเว็บ)</label></div>
+
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveWorkshop()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM MODAL -->
+  <div class="modal-bg" id="confirm-modal">
+    <div class="modal">
+      <h3>ส่งข้อความยืนยันทาง LINE</h3>
+      <div id="confirm-body"></div>
+    </div>
+  </div>
+
+  <!-- PAYMENT SETTINGS MODAL -->
+  <div class="modal-bg" id="pay-modal">
+    <div class="modal">
+      <h3>🏦 ตั้งค่าการชำระเงิน</h3>
+      <p class="muted" style="margin-top:-6px">อัปโหลด QR พร้อมเพย์/ธนาคารของคุณ ผู้สมัครจะเห็นและดาวน์โหลดไปโอนเอง แล้วแนบสลิปกลับมา</p>
+      <div class="field"><label>รูป QR พร้อมเพย์ / ธนาคาร</label>
+        <input type="file" id="pay-qr-file" accept="image/*" onchange="onQrFile(event)">
+        <div class="hint">บันทึกรูป QR จากแอปธนาคารของคุณ แล้วเลือกไฟล์นี้</div>
+      </div>
+      <div id="pay-qr-preview"></div>
+      <div class="field"><label>ธนาคาร</label><input id="pay-bank" placeholder="เช่น ธนาคารกสิกรไทย"></div>
+      <div class="field"><label>ชื่อบัญชี</label><input id="pay-accname" placeholder="เช่น น.ส. ธนพร ..."></div>
+      <div class="field"><label>เลขที่บัญชี / พร้อมเพย์</label><input id="pay-accnum" placeholder="xxx-x-xxxxx-x หรือเบอร์พร้อมเพย์"></div>
+      <div class="field"><label>หมายเหตุถึงผู้สมัคร (ไม่บังคับ)</label><textarea id="pay-note" placeholder="เช่น โอนแล้วแนบสลิปได้เลย ระบุชื่อในช่องหมายเหตุ"></textarea></div>
+      <div id="pay-save-msg"></div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
+        <button class="btn btn-primary" style="flex:1" onclick="savePaymentSettings()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIP VIEW MODAL -->
+  <div class="modal-bg" id="slip-modal">
+    <div class="modal center">
+      <h3>สลิปการโอนเงิน</h3>
+      <div id="slip-body"></div>
+      <button class="btn btn-ghost block mt" onclick="closeModal()">ปิด</button>
+    </div>
+  </div>
+
+  <!-- EDIT REGISTRATION MODAL -->
+  <div class="modal-bg" id="editreg-modal">
+    <div class="modal">
+      <h3>✏️ แก้ไขใบสมัคร</h3>
+      <input type="hidden" id="er-id">
+      <div class="field"><label>ชื่อ-นามสกุล</label><input id="er-name"></div>
+      <div class="field"><label>เบอร์โทรศัพท์</label><input id="er-phone"></div>
+      <div class="field"><label>จังหวัด</label><select id="er-province"></select></div>
+      <div class="field"><label>รอบ</label><select id="er-round"></select></div>
+      <div class="field"><label>จำนวน (ท่าน)</label><input id="er-people" type="number" min="1"></div>
+      <div class="field"><label>การแพ้อาหาร</label><input id="er-allergy" placeholder="ว่าง = ไม่มี"></div>
+      <div class="field"><label>โรคประจำตัว</label><input id="er-medical" placeholder="ว่าง = ไม่มี"></div>
+      <div class="field"><label>หมายเหตุ</label><textarea id="er-note"></textarea></div>
+      <p class="hint">* ยอดจะคำนวณใหม่อัตโนมัติจากรอบ + จำนวน + อุปกรณ์พิเศษเดิม</p>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveEditReg()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let PW = '';
+    const H = () => ({ 'Content-Type':'application/json', 'x-admin-password': PW });
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const fmtDate = (d) => { if(!d) return ''; try { return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});} catch { return d; } };
+    let WORKSHOPS = [], REGS = [], CFG = {}, S = {}, FILTER_WS = '';
+    const PROVINCES = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
+
+    async function login() {
+      PW = document.getElementById('pw').value;
+      const res = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password: PW }) });
+      if (!res.ok) { document.getElementById('login-err').innerHTML = '<div class="alert err">รหัสผ่านไม่ถูกต้อง</div>'; return; }
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      CFG = await (await fetch('/api/config')).json();
+      loadAll();
+    }
+
+    let AUTO = null;
+    async function loadAll() {
+      const [wRes, sRes] = await Promise.all([
+        fetch('/api/admin/workshops', { headers: H() }),
+        fetch('/api/admin/summary', { headers: H() })
+      ]);
+      WORKSHOPS = await wRes.json();
+      S = await sRes.json();
+      await Promise.all([loadRegs(), loadWaitlist()]);
+      renderStats();
+      renderStorage(S.storage);
+      renderWorkshops();
+      renderBanner();
+      applyFocusUI();
+      // auto-refresh every 60s so new slips/registrations appear without manual refresh
+      if (!AUTO) AUTO = setInterval(loadAll, 60000);
+    }
+    const stat = (n,l,alert) => `<div class="stat" style="${alert?'border-color:var(--danger);background:#fdeee9':''}"><div class="n" style="${alert?'color:var(--danger)':''}">${n}${alert?' 🔴':''}</div><div class="l">${l}</div></div>`;
+
+    // stats: use global summary, or compute for the focused workshop from loaded data
+    function renderStats() {
+      let s = S;
+      if (FILTER_WS) {
+        const rs = REGS.filter(r => r.workshopId === FILTER_WS);
+        s = {
+          totalRegistrations: rs.filter(r => r.status !== 'expired').length,
+          pendingPayment: rs.filter(r => r.status === 'pending_payment').length,
+          awaitingVerification: rs.filter(r => r.status === 'awaiting_verification').length,
+          paid: rs.filter(r => r.status === 'paid').length,
+          confirmed: rs.filter(r => r.status === 'confirmed').length,
+          attended: rs.filter(r => r.attended).length,
+          waitlist: WAIT.filter(w => w.workshopId === FILTER_WS).length,
+          revenue: rs.filter(r => r.status === 'paid' || r.status === 'confirmed').reduce((a, r) => a + Number(r.amount || 0), 0)
+        };
+      }
+      const aw = s.awaitingVerification || 0;
+      document.getElementById('stats').innerHTML = `
+        ${stat(s.totalRegistrations || 0,'ผู้สมัครทั้งหมด')}
+        ${stat(s.pendingPayment || 0,'รอชำระเงิน')}
+        ${stat(aw,'แจ้งโอน รอตรวจสอบ', aw>0)}
+        ${stat(s.paid || 0,'ชำระแล้ว รอยืนยัน')}
+        ${stat(s.confirmed || 0,'ยืนยันแล้ว')}
+        ${stat(s.attended||0,'เช็คอินแล้ว')}
+        ${stat(s.waitlist||0,'คิวสำรอง')}
+        ${stat(money(s.revenue||0)+' ฿','ยอดรับชำระ')}`;
+    }
+
+    // ----- per-workshop focus -----
+    function renderBanner() {
+      const el = document.getElementById('focus-banner');
+      if (!FILTER_WS) { el.innerHTML = ''; return; }
+      const w = WORKSHOPS.find(x => x.id === FILTER_WS);
+      el.innerHTML = `<div class="panel" style="padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-color:var(--blue)">
+        <div><span style="font-size:13px;color:var(--blue)">📂 กำลังดูเฉพาะเวิร์กช็อป</span><br><b style="color:var(--brown);font-size:18px">${w?w.title:'(เวิร์กช็อป)'}</b>
+        ${w?`<div class="muted" style="font-size:12px;margin-top:2px">${w.rounds.map(r=>fmtDate(r.date)+' '+r.time+' · '+r.taken+'/'+r.seats+' ที่').join(' | ')}</div>`:''}</div>
+        <button class="btn btn-ghost btn-sm" onclick="clearFocus()">← กลับดูทั้งหมด</button>
+      </div>`;
+    }
+    function applyFocusUI() {
+      const focused = !!FILTER_WS;
+      // Landing = workshop picker only. Per-workshop data appears after selecting one.
+      document.getElementById('ws-heading').style.display = focused ? 'none' : '';
+      document.getElementById('ws-list').style.display = focused ? 'none' : '';
+      const perWs = focused ? '' : 'none';
+      document.getElementById('stats').style.display = perWs;
+      document.getElementById('reg-heading').style.display = perWs;
+      document.getElementById('reg-section').style.display = perWs;
+      document.getElementById('wait-heading').style.display = perWs;
+      document.getElementById('wait-section').style.display = perWs;
+      // global DB-usage bar: show on landing (overall), hide inside a single workshop
+      document.getElementById('storage').style.display = focused ? 'none' : '';
+    }
+    function focusWorkshop(id) {
+      FILTER_WS = id;
+      renderStats(); renderRegs(); renderWaitlist(); renderBanner(); applyFocusUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function clearFocus() {
+      FILTER_WS = '';
+      renderStats(); renderRegs(); renderWaitlist(); renderBanner(); applyFocusUI();
+    }
+    function renderStorage(st) {
+      const el = document.getElementById('storage');
+      if (!st || !st.available) { el.innerHTML = ''; return; }
+      const pct = st.percent || 0;
+      const warn = pct >= 80, caution = pct >= 60;
+      const color = warn ? 'var(--danger)' : (caution ? 'var(--warn)' : 'var(--green)');
+      el.innerHTML = `
+        <div class="panel" style="padding:14px 18px">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:14px;color:var(--brown)">
+            <b>💾 พื้นที่ฐานข้อมูล (สลิป + ข้อมูลทั้งหมด)</b>
+            <span>${st.usedMB} / ${st.limitMB} MB · <b>${pct}%</b>${st.slips!=null?` · สลิป ${st.slips} ใบ`:''}</span>
+          </div>
+          <div style="height:11px;background:#eee;border-radius:6px;overflow:hidden;margin-top:8px">
+            <div style="height:100%;width:${Math.max(2,pct)}%;background:${color};transition:width .3s"></div>
+          </div>
+          ${warn ? '<div class="alert err" style="margin-top:10px">⚠️ พื้นที่ใกล้เต็มแล้ว! แนะนำ: กด “ดาวน์โหลด Excel” + เซฟสลิปเก็บไว้ในเครื่อง แล้วยกเลิก/ลบใบสมัครเก่าที่จบงานแล้ว หรืออัปเกรดฐานข้อมูล</div>'
+            : caution ? '<div class="alert warn" style="margin-top:10px">พื้นที่ใช้ไปเกินครึ่งแล้ว เริ่มวางแผนดาวน์โหลดเก็บข้อมูลเก่าได้</div>' : ''}
+        </div>`;
+    }
+
+    function renderWorkshops() {
+      document.getElementById('ws-list').innerHTML = WORKSHOPS.map(w => {
+        const rs = REGS.filter(r => r.workshopId === w.id);
+        const aw = rs.filter(r => r.status === 'awaiting_verification').length;
+        const active = rs.filter(r => r.status !== 'expired' && r.status !== 'cancelled').length;
+        return `
+        <div class="card"><div class="body">
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <span class="tag">${w.active?'เปิดรับ':'ปิดอยู่'}</span>
+            <span class="muted" style="font-size:12px">${w.rounds.length} รอบ</span>
+          </div>
+          <h3>${w.title}</h3>
+          <div class="rounds">${w.rounds.map(r=>`📅 ${fmtDate(r.date)} · ${r.time} · <b>${r.taken}/${r.seats}</b> ที่ · ${money(r.price)}฿`).join('<br>')||'<span class="muted">ยังไม่มีรอบ</span>'}</div>
+          <div style="font-size:13px;margin-top:8px;color:var(--brown)">👥 ผู้สมัคร <b>${active}</b> คน${aw?` · <b style="color:var(--danger)">🔴 แจ้งโอนรอตรวจ ${aw}</b>`:''}</div>
+          <div class="foot" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-blue btn-sm" onclick="focusWorkshop('${w.id}')">📂 ดูข้อมูล</button>
+            <button class="btn btn-ghost btn-sm" onclick="openWorkshop('${w.id}')">แก้ไข</button>
+            <button class="btn btn-ghost btn-sm" onclick="dupWorkshop('${w.id}')">📑 ทำซ้ำ</button>
+            <button class="btn btn-ghost btn-sm" onclick="delWorkshop('${w.id}')" style="color:var(--danger);border-color:var(--danger)">ลบ</button>
+          </div>
+        </div></div>`;
+      }).join('') || '<p class="muted">ยังไม่มีเวิร์กช็อป กด “เพิ่มเวิร์กช็อปใหม่” เพื่อเริ่ม</p>';
+    }
+
+    async function loadRegs() {
+      REGS = await (await fetch('/api/admin/registrations', { headers: H() })).json();
+      renderRegs();
+    }
+    function renderRegs() {
+      const f = document.getElementById('filter-status').value;
+      const q = (document.getElementById('reg-search').value||'').trim().toLowerCase();
+      const qd = q.replace(/\D/g,'');
+      let list = FILTER_WS ? REGS.filter(r=>r.workshopId===FILTER_WS) : REGS;
+      if (f) list = list.filter(r=>r.status===f);
+      if (q) list = list.filter(r => (r.name||'').toLowerCase().includes(q) || (qd && (r.phone||'').replace(/\D/g,'').includes(qd)));
+      const statusPill = (s) => ({
+        pending_payment:'<span class="pill pending">รอชำระ</span>',
+        awaiting_verification:'<span class="pill pending">แจ้งโอนแล้ว</span>',
+        paid:'<span class="pill paid">ชำระแล้ว</span>',
+        confirmed:'<span class="pill confirmed">ยืนยันแล้ว</span>',
+        cancelled:'<span class="pill cancelled">ยกเลิก</span>',
+        expired:'<span class="pill cancelled">หมดเวลา</span>'
+      }[s]||s);
+      document.getElementById('reg-body').innerHTML = list.map(r => `
+        <tr>
+          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}</td>
+          <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}</td>
+          <td>${money(r.amount)} ฿</td>
+          <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap">
+            ${(r.status==='pending_payment'||r.status==='awaiting_verification')?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ยืนยันรับเงินแล้ว</button>`:''}
+            ${r.status==='paid'?`<button class="btn btn-blue btn-sm" onclick="confirmReg('${r.id}')">ส่งยืนยัน LINE</button>`:''}
+            ${r.status==='confirmed'?`<button class="btn ${r.attended?'btn-ghost':'btn-blue'} btn-sm" onclick="attendReg('${r.id}')">${r.attended?'✅ เช็คอินแล้ว':'📍 เช็คอิน'}</button>`:''}
+            ${(r.status!=='cancelled'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="openEditReg('${r.id}')">✏️ แก้ไข</button>`:''}
+            ${(r.status!=='cancelled'&&r.status!=='confirmed'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
+          </td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:20px">ยังไม่มีผู้สมัคร</td></tr>';
+    }
+
+    // ----- waitlist -----
+    let WAIT = [];
+    async function loadWaitlist() {
+      WAIT = await (await fetch('/api/admin/waitlist', { headers: H() })).json();
+      renderWaitlist();
+    }
+    function renderWaitlist() {
+      const list = FILTER_WS ? WAIT.filter(w=>w.workshopId===FILTER_WS) : WAIT;
+      document.getElementById('wait-body').innerHTML = list.map(w => `
+        <tr>
+          <td><b>${w.name}</b></td>
+          <td>${w.phone}</td>
+          <td>${w.workshopTitle}<br><span class="muted">${w.round?fmtDate(w.round.date)+' '+w.round.time:''}</span></td>
+          <td class="muted">${w.createdAt?new Date(w.createdAt).toLocaleString('th-TH'):''}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="removeWait('${w.id}')" style="color:var(--danger)">ลบ</button></td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:16px">ยังไม่มีคิวสำรอง</td></tr>';
+    }
+    async function removeWait(id){ if(!confirm('ลบออกจากคิวสำรอง?'))return; await fetch('/api/admin/waitlist/'+id,{method:'DELETE',headers:H()}); loadWaitlist(); }
+
+    // ----- check-in -----
+    async function attendReg(id){ await fetch(`/api/admin/registrations/${id}/attend`,{method:'POST',headers:H()}); loadAll(); }
+
+    // ----- edit registration -----
+    function openEditReg(id){
+      const r = REGS.find(x=>x.id===id); if(!r) return;
+      const ws = WORKSHOPS.find(w=>w.id===r.workshopId);
+      document.getElementById('er-id').value = r.id;
+      document.getElementById('er-name').value = r.name||'';
+      document.getElementById('er-phone').value = r.phone||'';
+      document.getElementById('er-province').innerHTML = '<option value="">— เลือกจังหวัด —</option>' + PROVINCES.map(p=>`<option value="${p}" ${p===r.province?'selected':''}>${p}</option>`).join('');
+      document.getElementById('er-people').value = r.people||1;
+      document.getElementById('er-allergy').value = r.allergy||'';
+      document.getElementById('er-medical').value = r.medical||'';
+      document.getElementById('er-note').value = r.note||'';
+      document.getElementById('er-round').innerHTML = (ws?ws.rounds:[]).map(rd =>
+        `<option value="${rd.id}" ${rd.id===r.roundId?'selected':''}>${fmtDate(rd.date)} ${rd.time} · ${money(rd.price)}฿</option>`).join('');
+      document.getElementById('editreg-modal').classList.add('open');
+    }
+    async function saveEditReg(){
+      const id = document.getElementById('er-id').value;
+      const body = {
+        name: v('er-name'), phone: v('er-phone'),
+        province: document.getElementById('er-province').value,
+        roundId: document.getElementById('er-round').value,
+        people: Number(document.getElementById('er-people').value)||1,
+        allergy: v('er-allergy'), medical: v('er-medical'),
+        note: document.getElementById('er-note').value.trim()
+      };
+      await fetch(`/api/admin/registrations/${id}/edit`,{method:'PUT',headers:H(),body:JSON.stringify(body)});
+      closeModal(); loadAll();
+    }
+
+    // ----- duplicate workshop -----
+    function dupWorkshop(id){
+      const w = WORKSHOPS.find(x=>x.id===id); if(!w) return;
+      openWorkshop(); // opens blank "add" modal
+      document.getElementById('ws-modal-title').textContent = 'ทำซ้ำเวิร์กช็อป (สร้างใหม่)';
+      document.getElementById('f-title').value = w.title + ' (สำเนา)';
+      document.getElementById('f-subtitle').value = w.subtitle||'';
+      document.getElementById('f-category').value = w.category||'';
+      document.getElementById('f-desc').value = w.description||'';
+      document.getElementById('f-location').value = w.location||'';
+      WS_IMG = w.image||''; WS_IMG_POS = w.imagePos||'center'; showWsImagePreview();
+      document.getElementById('addons-wrap').innerHTML='';
+      (w.addons||[]).forEach(addAddonRow);
+      // rounds: keep time/seats/price but clear dates (new dates for the new run)
+      document.getElementById('rounds-wrap').innerHTML='';
+      (w.rounds&&w.rounds.length?w.rounds:[{}]).forEach(rd=>addRoundRow({time:rd.time,seats:rd.seats,price:rd.price}));
+    }
+
+    function exportExcel() {
+      const SRC = FILTER_WS ? REGS.filter(r=>r.workshopId===FILTER_WS) : REGS;
+      if (!SRC.length) { alert('ยังไม่มีข้อมูลผู้สมัครให้ดาวน์โหลด'); return; }
+      const statusTxt = {
+        pending_payment:'รอชำระเงิน', awaiting_verification:'แจ้งโอนแล้ว-รอตรวจสอบ',
+        paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก', expired:'หมดเวลา-ปล่อยที่นั่ง'
+      };
+      const esc = (v) => `"${String(v==null?'':v).replace(/"/g,'""')}"`;
+      const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','จังหวัด','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
+      const rows = SRC.map(r => [
+        r.createdAt ? new Date(r.createdAt).toLocaleString('th-TH') : '',
+        r.name, r.phone, r.province||'', r.lineId||'', r.email||'',
+        r.workshopTitle,
+        r.round ? (fmtDate(r.round.date)+' '+r.round.time) : '',
+        r.people,
+        (r.addons||[]).map(a=>a.name+' (+'+a.price+')').join(' | '),
+        r.allergy||'', r.medical||'',
+        r.amount,
+        statusTxt[r.status]||r.status,
+        r.id
+      ].map(esc).join(','));
+      // summary block at top
+      const s = {
+        total: SRC.length,
+        confirmed: SRC.filter(r=>r.status==='confirmed').length,
+        paid: SRC.filter(r=>r.status==='paid').length,
+        revenue: SRC.filter(r=>r.status==='paid'||r.status==='confirmed').reduce((a,r)=>a+Number(r.amount||0),0)
+      };
+      const summary = [
+        ['สรุป BARNBARN Workshop','ณ วันที่',new Date().toLocaleString('th-TH')].map(esc).join(','),
+        ['ผู้สมัครทั้งหมด', s.total].map(esc).join(','),
+        ['ยืนยันแล้ว', s.confirmed].map(esc).join(','),
+        ['ชำระแล้ว-รอยืนยัน', s.paid].map(esc).join(','),
+        ['ยอดรับชำระรวม(บาท)', s.revenue].map(esc).join(','),
+        ''
+      ];
+      const csv = '﻿' + summary.join('\n') + '\n' + headers.map(esc).join(',') + '\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const wsTag = FILTER_WS ? ('-' + ((WORKSHOPS.find(w=>w.id===FILTER_WS)||{}).title||'').replace(/[\\/:*?"<>|\s]+/g,'_')) : '';
+      a.download = 'barnbarn-registrations' + wsTag + '-' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function markPaid(id) {
+      const res = await fetch(`/api/admin/registrations/${id}/mark-paid`,{method:'POST',headers:H()});
+      let er = null; try { er = (await res.json()).emailResult; } catch(e){}
+      if (er) {
+        if (er.sent) alert('✅ ยืนยันรับเงินแล้ว และส่งอีเมลยืนยันให้ผู้สมัครเรียบร้อย 📧');
+        else if (er.skipped==='no_email') alert('✅ ยืนยันรับเงินแล้ว\n(ผู้สมัครไม่ได้กรอกอีเมล — ใช้ปุ่ม “ส่งยืนยัน LINE” เพื่อยืนยันผ่าน LINE OA แทนได้)');
+        else if (er.skipped==='not_configured') { /* email off — stay quiet */ }
+        else if (er.error) alert('✅ ยืนยันรับเงินแล้ว แต่ส่งอีเมลไม่สำเร็จ:\n'+er.error);
+      }
+      loadAll();
+    }
+    async function cancelReg(id) { if(!confirm('ยกเลิกใบสมัครนี้?'))return; await fetch(`/api/admin/registrations/${id}/cancel`,{method:'POST',headers:H()}); loadAll(); }
+
+    function viewSlip(id) {
+      const r = REGS.find(x=>x.id===id);
+      if (!r || !r.slipImage) return;
+      document.getElementById('slip-body').innerHTML =
+        `<p class="muted">${r.name} · ${money(r.amount)} ฿ · ${r.id}</p>
+         <img src="${r.slipImage}" style="max-width:100%;border-radius:10px;border:1px solid var(--line)">
+         <a class="btn btn-yellow btn-sm mt" href="${r.slipImage}" download="slip-${r.id}.jpg">⬇️ ดาวน์โหลดสลิป</a>`;
+      document.getElementById('slip-modal').classList.add('open');
+    }
+
+    // ----- payment settings -----
+    let QR_DATA = '';
+    async function openPaymentSettings() {
+      const s = await (await fetch('/api/admin/payment-settings', { headers: H() })).json();
+      QR_DATA = s.paymentQr || '';
+      document.getElementById('pay-bank').value = s.bankName || '';
+      document.getElementById('pay-accname').value = s.accountName || '';
+      document.getElementById('pay-accnum').value = s.accountNumber || '';
+      document.getElementById('pay-note').value = s.note || '';
+      document.getElementById('pay-save-msg').innerHTML = '';
+      document.getElementById('pay-qr-preview').innerHTML = QR_DATA
+        ? `<img src="${QR_DATA}" style="max-height:180px;border-radius:10px;border:1px solid var(--line)"><p class="hint">QR ปัจจุบัน (เลือกไฟล์ใหม่เพื่อเปลี่ยน)</p>` : '';
+      document.getElementById('pay-modal').classList.add('open');
+    }
+    function resizeImage(file, maxW=700, q=0.8) {
+      return new Promise((resolve,reject)=>{
+        const rd=new FileReader();
+        rd.onload=()=>{const im=new Image();im.onload=()=>{const sc=Math.min(1,maxW/im.width);const c=document.createElement('canvas');c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);c.getContext('2d').drawImage(im,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',q));};im.onerror=reject;im.src=rd.result;};
+        rd.onerror=reject;rd.readAsDataURL(file);
+      });
+    }
+    async function onQrFile(e){
+      const f=e.target.files[0]; if(!f) return;
+      QR_DATA = await resizeImage(f);
+      document.getElementById('pay-qr-preview').innerHTML = `<img src="${QR_DATA}" style="max-height:180px;border-radius:10px;border:1px solid var(--line)"><p class="hint">QR ใหม่ ✓</p>`;
+    }
+    async function savePaymentSettings(){
+      const body = {
+        paymentQr: QR_DATA,
+        bankName: v('pay-bank'), accountName: v('pay-accname'),
+        accountNumber: v('pay-accnum'), note: document.getElementById('pay-note').value.trim()
+      };
+      const res = await fetch('/api/admin/payment-settings',{method:'POST',headers:H(),body:JSON.stringify(body)});
+      if(res.ok){ document.getElementById('pay-save-msg').innerHTML='<div class="alert ok">บันทึกเรียบร้อย ✓</div>'; setTimeout(closeModal,900); }
+      else { document.getElementById('pay-save-msg').innerHTML='<div class="alert err">บันทึกไม่สำเร็จ</div>'; }
+    }
+
+    async function confirmReg(id) {
+      const res = await fetch(`/api/admin/registrations/${id}/confirm`,{method:'POST',headers:H()});
+      const data = await res.json();
+      const modal = document.getElementById('confirm-modal');
+      const body = document.getElementById('confirm-body');
+      if (data.sent) {
+        body.innerHTML = `<div class="alert ok">✅ ส่งข้อความยืนยันทาง LINE เรียบร้อยแล้ว</div>
+          <pre style="white-space:pre-wrap;background:#fff;padding:12px;border-radius:10px;border:1px solid var(--line)">${data.message}</pre>
+          <button class="btn btn-primary block" onclick="closeModal();loadAll()">เสร็จสิ้น</button>`;
+      } else {
+        body.innerHTML = `<div class="alert warn">ยังไม่ได้เชื่อม LINE อัตโนมัติ (หรือยังไม่มี LINE userId ของผู้สมัคร)<br>คัดลอกข้อความด้านล่างไปส่งเองผ่านแอป LINE OA ได้เลยค่ะ</div>
+          <textarea id="cmsg" style="min-height:180px">${data.message}</textarea>
+          <div style="display:flex;gap:8px" class="mt">
+            <button class="btn btn-yellow" onclick="copyMsg()">📋 คัดลอกข้อความ</button>
+            <button class="btn btn-primary" style="flex:1" onclick="closeModal();loadAll()">ทำเครื่องหมายยืนยันแล้ว</button>
+          </div>`;
+      }
+      modal.classList.add('open');
+    }
+    function copyMsg(){ const t=document.getElementById('cmsg'); t.select(); document.execCommand('copy'); }
+
+    // ----- workshop cover image (upload + focal position) -----
+    let WS_IMG = '';
+    let WS_IMG_POS = 'center';
+    async function onWsImage(e) {
+      const f = e.target.files[0]; if (!f) return;
+      WS_IMG = await resizeImage(f, 1000, 0.82);
+      WS_IMG_POS = 'center';
+      showWsImagePreview();
+    }
+    function clearWsImage() {
+      WS_IMG = ''; WS_IMG_POS = 'center';
+      const fi = document.getElementById('f-image-file'); if (fi) fi.value = '';
+      showWsImagePreview();
+    }
+    function setWsImagePos(pos) { WS_IMG_POS = pos; showWsImagePreview(); }
+    function showWsImagePreview() {
+      const p = document.getElementById('f-image-preview'); if (!p) return;
+      if (!WS_IMG) { p.innerHTML = ''; return; }
+      const positions = [
+        ['left top','↖'],['center top','↑'],['right top','↗'],
+        ['left center','←'],['center','●'],['right center','→'],
+        ['left bottom','↙'],['center bottom','↓'],['right bottom','↘']
+      ];
+      const btn = (active) => `width:100%;height:32px;border:1.5px solid ${active?'var(--orange)':'var(--line)'};background:${active?'var(--yellow)':'#fff'};border-radius:8px;cursor:pointer;font-size:15px;color:var(--brown)`;
+      const grid = positions.map(([pos,ar]) =>
+        `<button type="button" onclick="setWsImagePos('${pos}')" style="${btn(WS_IMG_POS===pos)}">${ar}</button>`).join('');
+      p.innerHTML = `
+        <div style="margin-top:10px">
+          <div style="height:150px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eee">
+            <img src="${WS_IMG}" style="width:100%;height:100%;object-fit:cover;object-position:${WS_IMG_POS};display:block">
+          </div>
+          <div class="hint" style="margin-top:6px">เลือกส่วนของรูปที่จะให้แสดงบนการ์ด (พรีวิวด้านบนอัปเดตตามที่เลือก):</div>
+          <div style="display:grid;grid-template-columns:repeat(3,44px);gap:6px;margin-top:6px">${grid}</div>
+          <button class="btn btn-ghost btn-sm mt" onclick="clearWsImage()" style="color:var(--danger)">ลบรูปปก</button>
+        </div>`;
+    }
+
+    // ----- workshop modal -----
+    function openWorkshop(id) {
+      const w = id ? WORKSHOPS.find(x=>x.id===id) : null;
+      document.getElementById('ws-modal-title').textContent = w ? 'แก้ไขเวิร์กช็อป' : 'เพิ่มเวิร์กช็อป';
+      document.getElementById('ws-id').value = w?.id || '';
+      document.getElementById('f-title').value = w?.title || '';
+      document.getElementById('f-subtitle').value = w?.subtitle || '';
+      document.getElementById('f-category').value = w?.category || '';
+      document.getElementById('f-desc').value = w?.description || '';
+      document.getElementById('f-location').value = w?.location || '';
+      WS_IMG = w?.image || ''; WS_IMG_POS = w?.imagePos || 'center'; showWsImagePreview();
+      document.getElementById('f-active').checked = w ? w.active : true;
+      document.getElementById('rounds-wrap').innerHTML = '';
+      (w?.rounds?.length ? w.rounds : [{}]).forEach(addRoundRow);
+      document.getElementById('addons-wrap').innerHTML = '';
+      (w?.addons || []).forEach(addAddonRow);
+      document.getElementById('ws-modal').classList.add('open');
+    }
+    function addAddonRow(a={}) {
+      const div = document.createElement('div');
+      div.style.cssText = 'display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-bottom:8px;align-items:center';
+      div.className = 'addon-row';
+      div.innerHTML = `
+        <input placeholder="ชื่ออุปกรณ์ เช่น ชุดอุปกรณ์กลับบ้าน" value="${(a.name||'').replace(/"/g,'&quot;')}" data-k="name">
+        <input type="number" placeholder="ราคาเพิ่ม" value="${a.price??''}" data-k="price">
+        <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+      document.getElementById('addons-wrap').appendChild(div);
+    }
+    function collectAddons() {
+      return [...document.querySelectorAll('#addons-wrap .addon-row')].map(row => {
+        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value); return o;
+      }).filter(a => (a.name||'').trim());
+    }
+    function addRoundRow(r={}) {
+      const div = document.createElement('div');
+      div.className = 'round-row';
+      div.innerHTML = `
+        <input type="date" value="${r.date||''}" data-k="date">
+        <input placeholder="13:00–16:00" value="${r.time||''}" data-k="time">
+        <input type="number" placeholder="ที่นั่ง" value="${r.seats??''}" data-k="seats">
+        <input type="number" placeholder="ราคา" value="${r.price??''}" data-k="price">
+        <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+      document.getElementById('rounds-wrap').appendChild(div);
+    }
+    function collectRounds() {
+      return [...document.querySelectorAll('#rounds-wrap .round-row')].map(row => {
+        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value); return o;
+      }).filter(r => r.date);
+    }
+    async function saveWorkshop() {
+      const id = document.getElementById('ws-id').value;
+      const payload = {
+        title: v('f-title'), subtitle: v('f-subtitle'), category: v('f-category'),
+        description: v('f-desc'), location: v('f-location'), image: WS_IMG, imagePos: WS_IMG_POS,
+        active: document.getElementById('f-active').checked, rounds: collectRounds(), addons: collectAddons()
+      };
+      if (!payload.title) return alert('กรุณาใส่ชื่อเวิร์กช็อป');
+      const url = id ? '/api/admin/workshops/'+id : '/api/admin/workshops';
+      await fetch(url, { method: id?'PUT':'POST', headers: H(), body: JSON.stringify(payload) });
+      closeModal(); loadAll();
+    }
+    async function delWorkshop(id) {
+      if (!confirm('ลบเวิร์กช็อปนี้? (ผู้สมัครเดิมจะยังอยู่ในระบบ)')) return;
+      await fetch('/api/admin/workshops/'+id, { method:'DELETE', headers: H() });
+      loadAll();
+    }
+    function closeModal(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+    const v = (id) => document.getElementById(id).value.trim();
+    document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) closeModal(); }));
+  </script>
+</body>
+</html>

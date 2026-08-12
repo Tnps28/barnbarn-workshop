@@ -303,6 +303,7 @@ export function createWorkshop(payload) {
     description: payload.description || '',
     location: payload.location || '',
     image: payload.image || '',
+    imagePos: payload.imagePos || 'center',
     rounds: normalizeRounds(payload.rounds),
     addons: normalizeAddons(payload.addons),
     active: payload.active !== false,
@@ -323,6 +324,7 @@ export function updateWorkshop(id, payload) {
     description: payload.description ?? ws.description,
     location: payload.location ?? ws.location,
     image: payload.image ?? ws.image,
+    imagePos: payload.imagePos ?? ws.imagePos,
     active: payload.active ?? ws.active
   });
   if (Array.isArray(payload.rounds)) ws.rounds = normalizeRounds(payload.rounds);

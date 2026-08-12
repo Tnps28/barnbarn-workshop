@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BARNBARN Workshop — เวิร์กช็อปงานคราฟต์และธรรมชาติ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="logo">🌿</span> BARNBARN</div>
+    <div style="display:flex;gap:18px;align-items:center">
+      <a class="plain" href="/my">📋 ดูการสมัครของฉัน</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <span class="leaf" style="left:8%;top:20px">🍃</span>
+    <span class="leaf" style="right:10%;top:60px">🌾</span>
+    <div class="badge">เวิร์กช็อปงานคราฟต์ · ธรรมชาติ · ทำมือ</div>
+    <h1>มาลงมือทำ<br />สิ่งเล็ก ๆ ด้วยมือของคุณ</h1>
+    <p>เลือกเวิร์กช็อปที่ชอบ จองรอบที่สะดวก จ่ายออนไลน์ได้ทันที
+       แล้วรอรับข้อความยืนยันทาง LINE จากเรา ง่าย ๆ สบายใจ ✨</p>
+    <div class="badges">
+      <span class="badge">✓ จ่ายง่ายผ่านพร้อมเพย์/บัตร</span>
+      <span class="badge">✓ ยืนยันทาง LINE</span>
+      <span class="badge">✓ ที่นั่งจำกัดต่อรอบ</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h2 class="section-title">เวิร์กช็อปที่เปิดรับสมัคร</h2>
+    <div id="list" class="grid"><p class="muted">กำลังโหลด…</p></div>
+  </main>
+
+  <div class="footer">
+    <div class="fline">🌿 BARNBARN Workshop · ติดต่อสอบถาม / แจ้งชำระเงินเพิ่มเติมได้ทาง LINE Official Account</div>
+    <a class="line-btn" href="https://lin.ee/TjK2193" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.5c-5.24 0-9.5 3.44-9.5 7.68 0 3.8 3.38 6.98 7.94 7.58.31.06.73.2.84.46.1.24.06.6.03.84l-.13.82c-.04.24-.19.95.83.52 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.52 2.04-3.07 2.04-4.79C21.5 6.94 17.24 3.5 12 3.5zM8.3 13.2H6.4c-.28 0-.5-.22-.5-.5V9.3c0-.28.22-.5.5-.5s.5.22.5.5v2.9h1.4c.28 0 .5.22.5.5s-.22.5-.5.5zm2-0.5c0 .28-.22.5-.5.5s-.5-.22-.5-.5V9.3c0-.28.22-.5.5-.5s.5.22.5.5v3.4zm4.2 0c0 .22-.14.41-.35.48-.05.02-.1.02-.15.02-.16 0-.31-.07-.4-.2l-1.4-1.9v1.6c0 .28-.22.5-.5.5s-.5-.22-.5-.5V9.3c0-.22.14-.41.35-.48.21-.07.44 0 .55.18l1.4 1.9V9.3c0-.28.22-.5.5-.5s.5.22.5.5v3.4zm3.1-2.2c.28 0 .5.22.5.5s-.22.5-.5.5h-1.4v.7h1.4c.28 0 .5.22.5.5s-.22.5-.5.5h-1.9c-.28 0-.5-.22-.5-.5V9.3c0-.28.22-.5.5-.5h1.9c.28 0 .5.22.5.5s-.22.5-.5.5h-1.4v.7h1.4z"/></svg>
+      เพิ่มเพื่อน LINE Official
+    </a>
+  </div>
+
+  <a class="line-fab" href="https://lin.ee/TjK2193" target="_blank" rel="noopener" aria-label="เพิ่มเพื่อน LINE Official">
+    <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.5c-5.24 0-9.5 3.44-9.5 7.68 0 3.8 3.38 6.98 7.94 7.58.31.06.73.2.84.46.1.24.06.6.03.84l-.13.82c-.04.24-.19.95.83.52 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.52 2.04-3.07 2.04-4.79C21.5 6.94 17.24 3.5 12 3.5z"/></svg>
+    <span class="lbl">แอดไลน์</span>
+  </a>
+
+  <script>
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const fmtDate = (d) => {
+      if (!d) return '';
+      try {
+        return new Date(d + 'T00:00:00').toLocaleDateString('th-TH',
+          { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+      } catch { return d; }
+    };
+
+    async function load() {
+      const res = await fetch('/api/workshops');
+      const items = await res.json();
+      const el = document.getElementById('list');
+      if (!items.length) { el.innerHTML = '<p class="muted">ยังไม่มีเวิร์กช็อปเปิดรับสมัครในขณะนี้</p>'; return; }
+      el.innerHTML = items.map(cardHtml).join('');
+    }
+
+    function cardHtml(w) {
+      const minPrice = Math.min(...w.rounds.map(r => r.price));
+      const nextRounds = w.rounds
+        .filter(r => r.remaining > 0)
+        .slice(0, 2)
+        .map(r => `<div>📅 ${fmtDate(r.date)} · ${r.time} <span class="muted">(เหลือ ${r.remaining} ที่)</span></div>`)
+        .join('');
+      const soldOut = w.rounds.every(r => r.remaining <= 0);
+      return `
+        <article class="card">
+          <div class="thumb">${w.image ? `<img src="${w.image}" alt="" style="object-position:${w.imagePos || 'center'}">` : (w.emoji || '🎨')}</div>
+          <div class="body">
+            ${w.category ? `<span class="tag">${w.category}</span>` : ''}
+            <h3>${w.title}</h3>
+            ${w.subtitle ? `<div class="muted">${w.subtitle}</div>` : ''}
+            <div class="rounds">${nextRounds || '<span class="muted">รอประกาศรอบใหม่</span>'}</div>
+            <div class="price">เริ่มต้น ${money(minPrice)} บาท</div>
+            <div class="foot">
+              ${soldOut
+                ? `<a class="btn btn-ghost block" href="/workshop?id=${w.id}">เต็มแล้ว · 🔔 เข้าคิวสำรอง</a>`
+                : `<a class="btn btn-primary block" href="/workshop?id=${w.id}">ดูรายละเอียด & สมัคร</a>`}
+            </div>
+          </div>
+        </article>`;
+    }
+    load();
+  </script>
+</body>
+</html>
