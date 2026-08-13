@@ -76,7 +76,7 @@
       const soldOut = w.rounds.every(r => r.remaining <= 0);
       return `
         <article class="card">
-          <div class="thumb">${w.image ? `<img src="${w.image}" alt="">` : (w.emoji || '🎨')}</div>
+          <div class="thumb">${w.image ? `<img src="${w.image}" alt="" style="object-position:${w.imagePos || 'center'}">` : (w.emoji || '🎨')}</div>
           <div class="body">
             ${w.category ? `<span class="tag">${w.category}</span>` : ''}
             <h3>${w.title}</h3>

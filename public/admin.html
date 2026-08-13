@@ -402,7 +402,7 @@
       document.getElementById('f-category').value = w.category||'';
       document.getElementById('f-desc').value = w.description||'';
       document.getElementById('f-location').value = w.location||'';
-      WS_IMG = w.image||''; showWsImagePreview();
+      WS_IMG = w.image||''; WS_IMG_POS = w.imagePos||'center'; showWsImagePreview();
       document.getElementById('addons-wrap').innerHTML='';
       (w.addons||[]).forEach(addAddonRow);
       // rounds: keep time/seats/price but clear dates (new dates for the new run)
@@ -537,23 +537,41 @@
     }
     function copyMsg(){ const t=document.getElementById('cmsg'); t.select(); document.execCommand('copy'); }
 
-    // ----- workshop cover image (upload) -----
+    // ----- workshop cover image (upload + focal position) -----
     let WS_IMG = '';
+    let WS_IMG_POS = 'center';
     async function onWsImage(e) {
       const f = e.target.files[0]; if (!f) return;
       WS_IMG = await resizeImage(f, 1000, 0.82);
+      WS_IMG_POS = 'center';
       showWsImagePreview();
     }
     function clearWsImage() {
-      WS_IMG = '';
+      WS_IMG = ''; WS_IMG_POS = 'center';
       const fi = document.getElementById('f-image-file'); if (fi) fi.value = '';
       showWsImagePreview();
     }
+    function setWsImagePos(pos) { WS_IMG_POS = pos; showWsImagePreview(); }
     function showWsImagePreview() {
       const p = document.getElementById('f-image-preview'); if (!p) return;
-      p.innerHTML = WS_IMG
-        ? `<div style="margin-top:8px"><img src="${WS_IMG}" style="max-height:150px;border-radius:10px;border:1px solid var(--line);display:block"><button class="btn btn-ghost btn-sm mt" onclick="clearWsImage()" style="color:var(--danger)">ลบรูปปก</button></div>`
-        : '';
+      if (!WS_IMG) { p.innerHTML = ''; return; }
+      const positions = [
+        ['left top','↖'],['center top','↑'],['right top','↗'],
+        ['left center','←'],['center','●'],['right center','→'],
+        ['left bottom','↙'],['center bottom','↓'],['right bottom','↘']
+      ];
+      const btn = (active) => `width:100%;height:32px;border:1.5px solid ${active?'var(--orange)':'var(--line)'};background:${active?'var(--yellow)':'#fff'};border-radius:8px;cursor:pointer;font-size:15px;color:var(--brown)`;
+      const grid = positions.map(([pos,ar]) =>
+        `<button type="button" onclick="setWsImagePos('${pos}')" style="${btn(WS_IMG_POS===pos)}">${ar}</button>`).join('');
+      p.innerHTML = `
+        <div style="margin-top:10px">
+          <div style="height:150px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#eee">
+            <img src="${WS_IMG}" style="width:100%;height:100%;object-fit:cover;object-position:${WS_IMG_POS};display:block">
+          </div>
+          <div class="hint" style="margin-top:6px">เลือกส่วนของรูปที่จะให้แสดงบนการ์ด (พรีวิวด้านบนอัปเดตตามที่เลือก):</div>
+          <div style="display:grid;grid-template-columns:repeat(3,44px);gap:6px;margin-top:6px">${grid}</div>
+          <button class="btn btn-ghost btn-sm mt" onclick="clearWsImage()" style="color:var(--danger)">ลบรูปปก</button>
+        </div>`;
     }
 
     // ----- workshop modal -----
@@ -566,7 +584,7 @@
       document.getElementById('f-category').value = w?.category || '';
       document.getElementById('f-desc').value = w?.description || '';
       document.getElementById('f-location').value = w?.location || '';
-      WS_IMG = w?.image || ''; showWsImagePreview();
+      WS_IMG = w?.image || ''; WS_IMG_POS = w?.imagePos || 'center'; showWsImagePreview();
       document.getElementById('f-active').checked = w ? w.active : true;
       document.getElementById('rounds-wrap').innerHTML = '';
       (w?.rounds?.length ? w.rounds : [{}]).forEach(addRoundRow);
@@ -609,7 +627,7 @@
       const id = document.getElementById('ws-id').value;
       const payload = {
         title: v('f-title'), subtitle: v('f-subtitle'), category: v('f-category'),
-        description: v('f-desc'), location: v('f-location'), image: WS_IMG,
+        description: v('f-desc'), location: v('f-location'), image: WS_IMG, imagePos: WS_IMG_POS,
         active: document.getElementById('f-active').checked, rounds: collectRounds(), addons: collectAddons()
       };
       if (!payload.title) return alert('กรุณาใส่ชื่อเวิร์กช็อป');
