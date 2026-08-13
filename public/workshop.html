@@ -226,6 +226,16 @@
             </div>
             <div class="field"><label>อีเมล</label><input id="email" type="email" placeholder="you@email.com"><div class="hint">ใช้ส่งอีเมลยืนยันการสมัครอัตโนมัติ (ถ้าไม่กรอก กรุณาแอดไลน์ OA ของเราเพื่อรับการยืนยัน)</div></div>
             <div class="field"><label>ชื่อบน LINE (สำหรับยืนยันผ่าน LINE OA)</label><input id="lineId" placeholder="ชื่อที่ใช้บน LINE ของคุณ"><div class="hint">กรอกชื่อบน LINE เพื่อให้เราจับคู่ตอนคุณแอดไลน์ OA ของเรา แล้วส่งข้อความยืนยันให้ (จำเป็นถ้าไม่กรอกอีเมล)</div></div>
+            <div class="field"><label>รู้จักกิจกรรมนี้จากช่องทางไหน? <span class="req">*</span></label>
+              <select id="source">
+                <option value="">— เลือกช่องทาง —</option>
+                <option value="เว็บไซต์">เว็บไซต์ (Website)</option>
+                <option value="LINE Official Account">LINE Official Account</option>
+                <option value="Facebook">Facebook</option>
+                <option value="มีคนบอกต่อ">มีคนบอกต่อ / เพื่อนแนะนำ</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+              </select>
+            </div>
 
             <div class="field">
               <label>การแพ้อาหาร</label>
@@ -276,6 +286,7 @@
         workshopId: wsId, roundId, people,
         name: val('name'), phone: val('phone'), email: val('email'),
         lineId: val('lineId'), province: val('province'),
+        source: val('source'),
         allergy: specVal('allergy'), medical: specVal('medical'),
         addonIds: SELECTED_ADDONS.map(a => a.id),
         note: val('note')
@@ -284,6 +295,7 @@
       if (!PROVINCES.includes(body.province)) { showErr('กรุณาเลือกจังหวัดจากรายการ'); return; }
       if (body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { showErr('รูปแบบอีเมลไม่ถูกต้อง'); return; }
       if (!body.email && !body.lineId) { showErr('กรุณากรอกอีเมล หรือ ชื่อ LINE อย่างน้อย 1 อย่าง (เพื่อรับการยืนยันการสมัคร)'); return; }
+      if (!body.source) { showErr('กรุณาเลือกช่องทางที่รู้จักกิจกรรมนี้'); return; }
       if (document.querySelector('input[name="allergy-has"]:checked').value === 'yes' && !body.allergy) { showErr('กรุณาระบุอาหารที่แพ้ หรือเลือก “ไม่มี”'); return; }
       if (document.querySelector('input[name="medical-has"]:checked').value === 'yes' && !body.medical) { showErr('กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”'); return; }
       const res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });

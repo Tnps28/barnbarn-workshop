@@ -6,6 +6,11 @@
   <title>ผู้ดูแลระบบ — BARNBARN Workshop</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    /* จัดเนื้อหาในตารางรายชื่อให้ชิดขอบบน แก้บรรทัดเหลื่อมกัน */
+    #reg-body td { vertical-align: top; }
+    .reg-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
+  </style>
 </head>
 <body>
   <nav class="nav">
@@ -153,7 +158,8 @@
       <div class="field"><label>จำนวน (ท่าน)</label><input id="er-people" type="number" min="1"></div>
       <div class="field"><label>การแพ้อาหาร</label><input id="er-allergy" placeholder="ว่าง = ไม่มี"></div>
       <div class="field"><label>โรคประจำตัว</label><input id="er-medical" placeholder="ว่าง = ไม่มี"></div>
-      <div class="field"><label>หมายเหตุ</label><textarea id="er-note"></textarea></div>
+      <div class="field"><label>หมายเหตุ (จากผู้สมัคร)</label><textarea id="er-note"></textarea></div>
+      <div class="field"><label>📌 โน้ตแอดมิน (เฉพาะแอดมินเห็น)</label><textarea id="er-adminnote" placeholder="โน้ตภายในสำหรับผู้จัด เช่น จ่ายมัดจำแล้ว / ติดต่อยาก / ขอใบเสร็จ"></textarea></div>
       <p class="hint">* ยอดจะคำนวณใหม่อัตโนมัติจากรอบ + จำนวน + อุปกรณ์พิเศษเดิม</p>
       <div style="display:flex;gap:10px;margin-top:8px">
         <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
@@ -326,16 +332,19 @@
       }[s]||s);
       document.getElementById('reg-body').innerHTML = list.map(r => `
         <tr>
-          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}</td>
+          <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}${r.adminNote?`<br><span style="font-size:12px;color:var(--brown);background:#fff3d6;padding:1px 7px;border-radius:6px;display:inline-block;margin-top:3px">📌 โน้ตแอดมิน: ${r.adminNote}</span>`:''}${r.source?`<br><span class="muted" style="font-size:12px">📣 รู้จักจาก: ${r.source}</span>`:''}</td>
           <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}</td>
           <td>${money(r.amount)} ฿</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
-          <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <td>
+            <div class="reg-actions">
             ${(r.status==='pending_payment'||r.status==='awaiting_verification')?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ยืนยันรับเงินแล้ว</button>`:''}
             ${r.status==='paid'?`<button class="btn btn-blue btn-sm" onclick="confirmReg('${r.id}')">ส่งยืนยัน LINE</button>`:''}
             ${r.status==='confirmed'?`<button class="btn ${r.attended?'btn-ghost':'btn-blue'} btn-sm" onclick="attendReg('${r.id}')">${r.attended?'✅ เช็คอินแล้ว':'📍 เช็คอิน'}</button>`:''}
+            <button class="btn btn-ghost btn-sm" onclick="editAdminNote('${r.id}')">📌 โน้ต</button>
             ${(r.status!=='cancelled'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="openEditReg('${r.id}')">✏️ แก้ไข</button>`:''}
             ${(r.status!=='cancelled'&&r.status!=='confirmed'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
+            </div>
           </td>
         </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:20px">ยังไม่มีผู้สมัคร</td></tr>';
     }
@@ -362,6 +371,15 @@
     // ----- check-in -----
     async function attendReg(id){ await fetch(`/api/admin/registrations/${id}/attend`,{method:'POST',headers:H()}); loadAll(); }
 
+    // ----- admin-only note (quick add/edit) -----
+    async function editAdminNote(id){
+      const r = REGS.find(x=>x.id===id); if(!r) return;
+      const val = prompt('📌 โน้ตสำหรับแอดมิน (เฉพาะแอดมินเห็น)\nเว้นว่างแล้วกดตกลง = ลบโน้ต', r.adminNote||'');
+      if (val === null) return;
+      await fetch(`/api/admin/registrations/${id}/edit`,{method:'PUT',headers:H(),body:JSON.stringify({adminNote: val.trim()})});
+      loadAll();
+    }
+
     // ----- edit registration -----
     function openEditReg(id){
       const r = REGS.find(x=>x.id===id); if(!r) return;
@@ -374,6 +392,7 @@
       document.getElementById('er-allergy').value = r.allergy||'';
       document.getElementById('er-medical').value = r.medical||'';
       document.getElementById('er-note').value = r.note||'';
+      document.getElementById('er-adminnote').value = r.adminNote||'';
       document.getElementById('er-round').innerHTML = (ws?ws.rounds:[]).map(rd =>
         `<option value="${rd.id}" ${rd.id===r.roundId?'selected':''}>${fmtDate(rd.date)} ${rd.time} · ${money(rd.price)}฿</option>`).join('');
       document.getElementById('editreg-modal').classList.add('open');
@@ -386,7 +405,8 @@
         roundId: document.getElementById('er-round').value,
         people: Number(document.getElementById('er-people').value)||1,
         allergy: v('er-allergy'), medical: v('er-medical'),
-        note: document.getElementById('er-note').value.trim()
+        note: document.getElementById('er-note').value.trim(),
+        adminNote: document.getElementById('er-adminnote').value.trim()
       };
       await fetch(`/api/admin/registrations/${id}/edit`,{method:'PUT',headers:H(),body:JSON.stringify(body)});
       closeModal(); loadAll();
@@ -418,7 +438,7 @@
         paid:'ชำระแล้ว-รอยืนยัน', confirmed:'ยืนยันแล้ว', cancelled:'ยกเลิก', expired:'หมดเวลา-ปล่อยที่นั่ง'
       };
       const esc = (v) => `"${String(v==null?'':v).replace(/"/g,'""')}"`;
-      const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','จังหวัด','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
+      const headers = ['วันที่สมัคร','ชื่อ-นามสกุล','เบอร์โทร','จังหวัด','LINE','อีเมล','เวิร์กช็อป','รอบ','จำนวน(ท่าน)','อุปกรณ์พิเศษ','แพ้อาหาร','โรคประจำตัว','รู้จักจากช่องทาง','โน้ตแอดมิน','ยอด(บาท)','สถานะ','รหัสอ้างอิง'];
       const rows = SRC.map(r => [
         r.createdAt ? new Date(r.createdAt).toLocaleString('th-TH') : '',
         r.name, r.phone, r.province||'', r.lineId||'', r.email||'',
@@ -426,7 +446,7 @@
         r.round ? (fmtDate(r.round.date)+' '+r.round.time) : '',
         r.people,
         (r.addons||[]).map(a=>a.name+' (+'+a.price+')').join(' | '),
-        r.allergy||'', r.medical||'',
+        r.allergy||'', r.medical||'', r.source||'', r.adminNote||'',
         r.amount,
         statusTxt[r.status]||r.status,
         r.id
