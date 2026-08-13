@@ -161,6 +161,7 @@ app.post('/api/register', (req, res) => {
     email: req.body.email,
     lineId: req.body.lineId,
     province: req.body.province,
+    source: req.body.source,
     people,
     allergy: req.body.allergy,
     medical: req.body.medical,
@@ -352,6 +353,7 @@ app.put('/api/admin/registrations/:id/edit', requireAdmin, (req, res) => {
     allergy: b.allergy ?? reg.allergy,
     medical: b.medical ?? reg.medical,
     note: b.note ?? reg.note,
+    adminNote: b.adminNote ?? reg.adminNote,
     people: Number(b.people) || reg.people,
     roundId: b.roundId ?? reg.roundId
   };
