@@ -347,7 +347,7 @@
         <tr>
           <td><b>${r.name}</b><br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}${r.adminNote?`<br><span style="font-size:12px;color:var(--brown);background:#fff3d6;padding:1px 7px;border-radius:6px;display:inline-block;margin-top:3px">📌 โน้ตแอดมิน: ${r.adminNote}</span>`:''}${r.source?`<br><span class="muted" style="font-size:12px">📣 รู้จักจาก: ${r.source}</span>`:''}</td>
           <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}</td>
-          <td>${money(r.amount)} ฿</td>
+          <td>${r.amount>0 ? money(r.amount)+' ฿' : 'ฟรี'}</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
           <td>
             <div class="reg-actions">
@@ -357,6 +357,7 @@
             <button class="btn btn-ghost btn-sm" onclick="editAdminNote('${r.id}')">📌 โน้ต</button>
             ${(r.status!=='cancelled'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="openEditReg('${r.id}')">✏️ แก้ไข</button>`:''}
             ${(r.status!=='cancelled'&&r.status!=='confirmed'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
+            <button class="btn btn-ghost btn-sm" onclick="delReg('${r.id}','${(r.name||'').replace(/'/g,'')}')" style="color:#fff;background:var(--danger)">🗑 ลบ</button>
             </div>
           </td>
         </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:20px">ยังไม่มีผู้สมัคร</td></tr>';
@@ -380,6 +381,14 @@
         </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:16px">ยังไม่มีคิวสำรอง</td></tr>';
     }
     async function removeWait(id){ if(!confirm('ลบออกจากคิวสำรอง?'))return; await fetch('/api/admin/waitlist/'+id,{method:'DELETE',headers:H()}); loadWaitlist(); }
+
+    // ลบใบสมัครถาวร (สำหรับเคลียร์ข้อมูลทดสอบ) — คืนที่นั่งให้รอบทันที
+    async function delReg(id, name){
+      if(!confirm('ลบใบสมัครของ "'+(name||id)+'" ออกถาวร?\n(ใช้สำหรับลบข้อมูลทดสอบ — ลบแล้วกู้คืนไม่ได้ และที่นั่งจะถูกคืนให้รอบ)')) return;
+      const res = await fetch('/api/admin/registrations/'+encodeURIComponent(id),{method:'DELETE',headers:H()});
+      if(!res.ok){ alert('ลบไม่สำเร็จ'); return; }
+      loadAll();
+    }
 
     // ----- check-in -----
     async function attendReg(id){ await fetch(`/api/admin/registrations/${id}/attend`,{method:'POST',headers:H()}); loadAll(); }
@@ -629,6 +638,7 @@
       const div = document.createElement('div');
       div.style.cssText = 'display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-bottom:8px;align-items:center';
       div.className = 'addon-row';
+      div.dataset.id = a.id || '';
       div.innerHTML = `
         <input placeholder="ชื่ออุปกรณ์ เช่น ชุดอุปกรณ์กลับบ้าน" value="${(a.name||'').replace(/"/g,'&quot;')}" data-k="name">
         <input type="number" placeholder="ราคาเพิ่ม" value="${a.price??''}" data-k="price">
@@ -637,12 +647,15 @@
     }
     function collectAddons() {
       return [...document.querySelectorAll('#addons-wrap .addon-row')].map(row => {
-        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value); return o;
+        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value);
+        if (row.dataset.id) o.id = row.dataset.id;
+        return o;
       }).filter(a => (a.name||'').trim());
     }
     function addRoundRow(r={}) {
       const div = document.createElement('div');
       div.className = 'round-row';
+      div.dataset.id = r.id || '';   // เก็บ id รอบเดิมไว้ กันรายชื่อผู้สมัครหลุดตอนแก้ไข
       div.innerHTML = `
         <input type="date" value="${r.date||''}" data-k="date">
         <input placeholder="13:00–16:00" value="${r.time||''}" data-k="time">
@@ -653,7 +666,9 @@
     }
     function collectRounds() {
       return [...document.querySelectorAll('#rounds-wrap .round-row')].map(row => {
-        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value); return o;
+        const o = {}; row.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value);
+        if (row.dataset.id) o.id = row.dataset.id;   // ส่ง id เดิมกลับ เพื่อให้รอบไม่ถูกสร้างใหม่
+        return o;
       }).filter(r => r.date);
     }
     async function saveWorkshop() {
