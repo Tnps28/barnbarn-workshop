@@ -111,6 +111,8 @@ img { max-width: 100%; display: block; }
 .btn-blue:hover { filter: brightness(1.06); }
 .btn-ghost { background: transparent; color: var(--brown); border: 1.5px solid var(--brown-soft); }
 .btn-yellow { background: var(--yellow); color: var(--brown); }
+.btn-green { background: #2e9c5a; color: #fff; }
+.btn-green:hover { filter: brightness(1.06); }
 .btn-sm { padding: 7px 12px; font-size: 14px; border-radius: 9px; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .block { width: 100%; }
