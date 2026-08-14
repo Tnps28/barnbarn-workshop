@@ -98,7 +98,7 @@
           <label class="k" style="cursor:${full?'not-allowed':'pointer'};display:flex;align-items:center;gap:8px">
             <input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto">
             📅 ${fmtDate(r.date)} · ${r.time}</label>
-          <span class="v">${money(r.price)} บาท ${full
+          <span class="v">${r.price>0 ? money(r.price)+' บาท' : 'ฟรี'} ${full
             ? `<span style="color:var(--danger)">· เต็ม</span> <button class="btn btn-ghost btn-sm" onclick="openWaitlist('${r.id}')">🔔 เข้าคิวสำรอง</button>`
             : `<span class="muted">· เหลือ ${r.remaining} ที่</span>`}</span>
         </div>`;
@@ -257,17 +257,17 @@
             <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="note" placeholder="มากับเพื่อน / คำถามอื่น ๆ"></textarea></div>
             <div style="display:flex;gap:10px">
               <button class="btn btn-ghost" onclick="renderStep1()">◂ ย้อนกลับ</button>
-              <button class="btn btn-primary" style="flex:1" onclick="submitReg('${roundId}',${people})">ยืนยันข้อมูล & ไปชำระเงิน ▸</button>
+              <button class="btn btn-primary" style="flex:1" onclick="submitReg('${roundId}',${people})">${total>0 ? 'ยืนยันข้อมูล & ไปชำระเงิน ▸' : 'ยืนยันการสมัคร (ฟรี) ▸'}</button>
             </div>
           </div>
           <aside class="panel">
             <h3 style="margin-top:0;color:var(--brown)">สรุปการสมัคร</h3>
             <div class="rowline"><span class="k">เวิร์กช็อป</span><span class="v">${WS.title}</span></div>
             <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(r.date)}<br>${r.time}</span></div>
-            <div class="rowline"><span class="k">ราคา/ท่าน</span><span class="v">${money(r.price)} บาท</span></div>
+            <div class="rowline"><span class="k">ราคา/ท่าน</span><span class="v">${r.price>0 ? money(r.price)+' บาท' : 'ฟรี'}</span></div>
             <div class="rowline"><span class="k">จำนวน</span><span class="v">${people} ท่าน</span></div>
             ${SELECTED_ADDONS.map(a=>`<div class="rowline"><span class="k">➕ ${a.name}</span><span class="v">+${money(a.price)} บาท</span></div>`).join('')}
-            <div class="rowline"><span class="k total">ยอดรวม</span><span class="v total">${money(total)} บาท</span></div>
+            <div class="rowline"><span class="k total">ยอดรวม</span><span class="v total">${total>0 ? money(total)+' บาท' : 'ฟรี'}</span></div>
           </aside>
         </div>`;
     }
@@ -302,6 +302,8 @@
       const data = await res.json();
       if (!res.ok) { showErr(data.error || 'เกิดข้อผิดพลาด'); return; }
       REG = data.registration;
+      REG_ROUND = data.round;
+      if (Number(REG.amount) <= 0) { freeSuccessView(); return; }  // กิจกรรมฟรี — ข้ามหน้าชำระเงิน/QR
       renderStep3(data.round);
     }
 
@@ -421,6 +423,26 @@
           <div class="alert info">รหัสอ้างอิง: <b>${REG.id}</b><br>
             ผู้จัดกำลังตรวจสอบการชำระเงิน และจะส่งข้อความยืนยันที่นั่งให้คุณเร็ว ๆ นี้ค่ะ
             ${CFG.lineAddFriendUrl ? 'กรุณาเพิ่มเพื่อน LINE เพื่อรับการยืนยัน' : ''}</div>
+          ${addFriend}
+          ${REG_ROUND ? `<a class="btn btn-blue block mt" href="${calendarLink(REG_ROUND)}" target="_blank" rel="noopener">📅 เพิ่มลงปฏิทิน (กันลืมวัน)</a>` : ''}
+          ${mapLink() ? `<a class="btn btn-ghost block mt" href="${mapLink()}" target="_blank" rel="noopener">📍 ดูแผนที่สถานที่</a>` : ''}
+          <a class="btn btn-yellow block mt" href="/my?phone=${encodeURIComponent(REG.phone||'')}">📋 ดูการสมัครของฉัน</a>
+          <a class="btn btn-ghost block mt" href="/">กลับหน้าแรก</a>
+        </div>`;
+    }
+
+    // กิจกรรมฟรี — ยืนยันการสมัครทันที ไม่มีขั้นตอนชำระเงิน
+    function freeSuccessView() {
+      const addFriend = CFG.lineAddFriendUrl
+        ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE Official</a>`
+        : '';
+      document.getElementById('root').innerHTML = `
+        <div class="panel center" style="max-width:560px;margin:0 auto">
+          <div style="font-size:64px">🎉</div>
+          <h1 style="color:var(--green)">สมัครสำเร็จ!</h1>
+          <p>ขอบคุณค่ะ ${REG.name} 🌿 กิจกรรมนี้ <b>ฟรี ไม่มีค่าใช้จ่าย</b> — ที่นั่งของคุณได้รับการยืนยันเรียบร้อยแล้ว</p>
+          <div class="alert ok">รหัสอ้างอิง: <b>${REG.id}</b><br>
+            ${REG.email ? 'เราได้ส่งอีเมลยืนยันการสมัครให้คุณแล้ว 📧' : 'กรุณาเพิ่มเพื่อน LINE OA ของเราไว้รับข่าวสารและรายละเอียดกิจกรรม'}</div>
           ${addFriend}
           ${REG_ROUND ? `<a class="btn btn-blue block mt" href="${calendarLink(REG_ROUND)}" target="_blank" rel="noopener">📅 เพิ่มลงปฏิทิน (กันลืมวัน)</a>` : ''}
           ${mapLink() ? `<a class="btn btn-ghost block mt" href="${mapLink()}" target="_blank" rel="noopener">📍 ดูแผนที่สถานที่</a>` : ''}

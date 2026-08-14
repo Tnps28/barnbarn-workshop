@@ -11,6 +11,7 @@
     #reg-body td { vertical-align: top; }
     .reg-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <nav class="nav">
@@ -38,6 +39,7 @@
       <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
       <button class="btn btn-yellow" onclick="openPaymentSettings()">🏦 ตั้งค่าการชำระเงิน (QR/บัญชี)</button>
       <button class="btn btn-blue" onclick="exportExcel()">⬇️ ดาวน์โหลด Excel</button>
+      <button class="btn btn-green" onclick="openScanner()">📷 สแกนเช็คอิน</button>
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
 
@@ -165,6 +167,17 @@
         <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
         <button class="btn btn-primary" style="flex:1" onclick="saveEditReg()">บันทึก</button>
       </div>
+    </div>
+  </div>
+
+  <!-- QR CHECK-IN SCANNER MODAL -->
+  <div class="modal-bg" id="scan-modal">
+    <div class="modal">
+      <h3>📷 สแกน QR เพื่อเช็คอิน</h3>
+      <p class="hint">ให้ผู้เข้าร่วมเปิดหน้า “ดูการสมัครของฉัน” แล้วยื่น QR ให้กล้องสแกน — สแกนแล้วเช็คชื่อทันที</p>
+      <div id="qr-reader" style="width:100%;max-width:340px;margin:8px auto"></div>
+      <div id="scan-result" style="margin-top:10px"></div>
+      <button class="btn btn-ghost block mt" onclick="closeScanner()">ปิดกล้อง</button>
     </div>
   </div>
 
@@ -660,7 +673,48 @@
       await fetch('/api/admin/workshops/'+id, { method:'DELETE', headers: H() });
       loadAll();
     }
-    function closeModal(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+    function closeModal(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); stopScanner(); }
+
+    // ---------- QR check-in scanner ----------
+    let SCANNER = null, lastScan = { id:'', t:0 };
+    async function openScanner(){
+      const rs = document.getElementById('scan-result');
+      rs.innerHTML = '';
+      document.getElementById('scan-modal').classList.add('open');
+      if (typeof Html5Qrcode === 'undefined') {
+        rs.innerHTML = '<div class="alert err">โหลดตัวสแกนไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่</div>';
+        return;
+      }
+      try {
+        SCANNER = new Html5Qrcode('qr-reader');
+        await SCANNER.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 }, onScan, () => {});
+      } catch (e) {
+        rs.innerHTML = '<div class="alert err">เปิดกล้องไม่ได้: ' + (e && e.message ? e.message : e) + '<br><span class="muted">ต้องอนุญาตให้ใช้กล้อง และเปิดเว็บผ่าน https</span></div>';
+      }
+    }
+    async function stopScanner(){
+      if (!SCANNER) return;
+      const s = SCANNER; SCANNER = null;
+      try { await s.stop(); s.clear(); } catch (e) {}
+    }
+    async function closeScanner(){ await stopScanner(); document.getElementById('scan-modal').classList.remove('open'); loadAll(); }
+    async function onScan(text){
+      const id = String(text || '').trim();
+      const now = Date.now();
+      if (id === lastScan.id && now - lastScan.t < 3000) return; // กันสแกนซ้ำรัว ๆ
+      lastScan = { id, t: now };
+      const rs = document.getElementById('scan-result');
+      try {
+        const res = await fetch('/api/admin/registrations/' + encodeURIComponent(id) + '/checkin', { method:'POST', headers: H() });
+        if (!res.ok) { rs.innerHTML = '<div class="alert err">❌ ไม่พบรหัสนี้: ' + id + '</div>'; return; }
+        const d = await res.json();
+        rs.innerHTML = d.already
+          ? '<div class="alert" style="background:#fff7e6;border:1px solid #ffd591;color:#8a5a00;padding:10px;border-radius:10px">ℹ️ <b>' + d.name + '</b> เช็คอินไปแล้วก่อนหน้านี้<br><span class="muted">' + (d.workshopTitle||'') + '</span></div>'
+          : '<div class="alert" style="background:#eafbea;border:1px solid #b7e4b7;color:#256d25;padding:10px;border-radius:10px">✅ เช็คอินสำเร็จ: <b>' + d.name + '</b><br><span class="muted">' + (d.workshopTitle||'') + '</span></div>';
+      } catch (e) {
+        rs.innerHTML = '<div class="alert err">เกิดข้อผิดพลาด: ' + (e && e.message ? e.message : e) + '</div>';
+      }
+    }
     const v = (id) => document.getElementById(id).value.trim();
     document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) closeModal(); }));
   </script>

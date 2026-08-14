@@ -82,7 +82,7 @@
             <h3>${w.title}</h3>
             ${w.subtitle ? `<div class="muted">${w.subtitle}</div>` : ''}
             <div class="rounds">${nextRounds || '<span class="muted">รอประกาศรอบใหม่</span>'}</div>
-            <div class="price">เริ่มต้น ${money(minPrice)} บาท</div>
+            <div class="price">${minPrice>0 ? 'เริ่มต้น '+money(minPrice)+' บาท' : 'ฟรี ไม่มีค่าใช้จ่าย'}</div>
             <div class="foot">
               ${soldOut
                 ? `<a class="btn btn-ghost block" href="/workshop?id=${w.id}">เต็มแล้ว · 🔔 เข้าคิวสำรอง</a>`

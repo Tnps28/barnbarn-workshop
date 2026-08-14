@@ -6,6 +6,7 @@
   <title>ดูการสมัครของฉัน — BARNBARN</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
   <nav class="nav">
@@ -77,11 +78,22 @@
             ${r.round ? `<div class="muted">📅 ${fmtDate(r.round.date)} · ${r.round.time}</div>` : ''}
             ${r.location ? `<div class="muted">📍 ${r.location}</div>` : ''}
             <div class="muted">👥 ${r.people} ท่าน${r.addons&&r.addons.length?` · ➕ ${r.addons.map(a=>a.name).join(', ')}`:''}</div>
-            <div class="price">${money(r.amount)} บาท</div>
+            <div class="price">${r.amount>0 ? money(r.amount)+' บาท' : 'ฟรี'}</div>
             <div class="muted" style="font-size:12px">รหัสอ้างอิง: ${r.id}</div>
+            ${['cancelled','expired'].includes(r.status) ? '' : `
+            <div style="text-align:center;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)">
+              <div id="qr-${r.id}" style="display:inline-block"></div>
+              <div class="muted" style="font-size:12px;margin-top:6px">📷 แสดง QR นี้ให้ผู้จัดสแกน เพื่อเช็คอินหน้างาน</div>
+            </div>`}
           </div></div>`).join('')}
         </div>
         <div class="alert info mt">มีคำถามเรื่องการชำระเงินหรือยืนยันที่นั่ง? ทักผู้จัดทาง LINE ได้เลยค่ะ</div>`;
+      // สร้าง QR ต่อรายการ (เข้ารหัสรหัสอ้างอิง) สำหรับให้ผู้จัดสแกนเช็คอิน
+      data.registrations.forEach(r => {
+        if (['cancelled','expired'].includes(r.status)) return;
+        const el = document.getElementById('qr-' + r.id);
+        if (el && window.QRCode) { el.innerHTML = ''; new QRCode(el, { text: r.id, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }); }
+      });
     }
 
     // allow ?phone= in URL to auto-search
