@@ -385,6 +385,13 @@ app.put('/api/admin/registrations/:id/edit', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
+// admin permanently deletes a registration (e.g. cleaning up test sign-ups); frees the seat
+app.delete('/api/admin/registrations/:id', requireAdmin, (req, res) => {
+  const ok = db.deleteRegistration(String(req.params.id || '').trim());
+  if (!ok) return res.status(404).json({ error: 'ไม่พบใบสมัครนี้' });
+  res.json({ ok: true });
+});
+
 // ---------- admin: waitlist ----------
 app.get('/api/admin/waitlist', requireAdmin, (req, res) => {
   const out = db.listWaitlist().map((w) => {

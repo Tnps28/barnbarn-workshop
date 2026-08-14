@@ -397,3 +397,11 @@ export function updateRegistration(id, patch) {
   write(db);
   return reg;
 }
+export function deleteRegistration(id) {
+  const db = read();
+  const before = db.registrations.length;
+  db.registrations = db.registrations.filter((r) => r.id !== id);
+  if (db.registrations.length === before) return false;
+  write(db);
+  return true;
+}
