@@ -169,7 +169,15 @@ app.post('/api/register', (req, res) => {
     note: req.body.note,
     amount: round.price * people + addonsTotal
   });
-  res.json({ registration: reg, workshop: { title: ws.title, location: ws.location }, round });
+
+  // Free workshop (amount 0): no payment step — auto‑confirm the seat and email the participant.
+  let out = reg;
+  const isFree = (Number(reg.amount) || 0) <= 0;
+  if (isFree) {
+    out = db.updateRegistration(reg.id, { status: 'confirmed', paidNote: 'กิจกรรมฟรี (ไม่มีค่าใช้จ่าย)' }) || reg;
+    sendConfirmationEmail(out, ws, round).catch(() => {});
+  }
+  res.json({ registration: out, workshop: { title: ws.title, location: ws.location }, round, free: isFree });
 });
 
 // ---------- public: join waitlist (when a round is full) ----------
@@ -336,6 +344,16 @@ app.post('/api/admin/registrations/:id/attend', requireAdmin, (req, res) => {
   if (!reg) return res.status(404).json({ error: 'not found' });
   const updated = db.updateRegistration(reg.id, { attended: !reg.attended });
   res.json(updated);
+});
+
+// scan-to-check-in: set attended = true (idempotent). Used by the QR scanner.
+app.post('/api/admin/registrations/:id/checkin', requireAdmin, (req, res) => {
+  const reg = db.getRegistration(String(req.params.id || '').trim());
+  if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัครนี้' });
+  const already = !!reg.attended;
+  const updated = db.updateRegistration(reg.id, { attended: true });
+  const ws = db.getWorkshop(updated.workshopId);
+  res.json({ ok: true, already, name: updated.name, status: updated.status, workshopTitle: ws ? ws.title : '' });
 });
 
 // admin edits a registration (name/phone/people/round/allergy/medical/note); recomputes amount
