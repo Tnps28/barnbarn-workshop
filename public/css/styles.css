@@ -74,7 +74,7 @@ img { max-width: 100%; display: block; }
 .section-title { font-size: 24px; color: var(--brown); margin: 8px 0 20px; }
 
 /* ---------- workshop cards ---------- */
-.grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 .card {
   background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
   overflow: hidden; box-shadow: var(--shadow); display: flex; flex-direction: column;
