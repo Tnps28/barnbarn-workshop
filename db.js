@@ -405,3 +405,21 @@ export function deleteRegistration(id) {
   write(db);
   return true;
 }
+
+// Re-link registrations whose roundId no longer exists (orphaned by past workshop edits
+// that regenerated round ids). Safe auto-fix for single-round workshops; multi-round
+// orphans are reported but left untouched (can't infer which round they belonged to).
+export function repairOrphanRegistrations() {
+  const db = read();
+  let fixed = 0, unresolved = 0;
+  for (const reg of db.registrations) {
+    if (reg.status === 'cancelled' || reg.status === 'expired') continue;
+    const ws = db.workshops.find((w) => w.id === reg.workshopId);
+    if (!ws || !ws.rounds || !ws.rounds.length) continue;
+    if (ws.rounds.some((r) => r.id === reg.roundId)) continue; // already linked
+    if (ws.rounds.length === 1) { reg.roundId = ws.rounds[0].id; fixed++; }
+    else unresolved++;
+  }
+  if (fixed) write(db);
+  return { fixed, unresolved };
+}

@@ -392,6 +392,11 @@ app.delete('/api/admin/registrations/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// admin one-click repair: re-link registrations that were orphaned from their round
+app.post('/api/admin/repair-seats', requireAdmin, (req, res) => {
+  res.json(db.repairOrphanRegistrations());
+});
+
 // ---------- admin: waitlist ----------
 app.get('/api/admin/waitlist', requireAdmin, (req, res) => {
   const out = db.listWaitlist().map((w) => {
