@@ -40,6 +40,7 @@
       <button class="btn btn-yellow" onclick="openPaymentSettings()">🏦 ตั้งค่าการชำระเงิน (QR/บัญชี)</button>
       <button class="btn btn-blue" onclick="exportExcel()">⬇️ ดาวน์โหลด Excel</button>
       <button class="btn btn-green" onclick="openScanner()">📷 สแกนเช็คอิน</button>
+      <button class="btn btn-ghost" onclick="repairSeats()">🔧 ซ่อมข้อมูลที่นั่ง</button>
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
 
@@ -381,6 +382,15 @@
         </tr>`).join('') || '<tr><td colspan="5" class="muted center" style="padding:16px">ยังไม่มีคิวสำรอง</td></tr>';
     }
     async function removeWait(id){ if(!confirm('ลบออกจากคิวสำรอง?'))return; await fetch('/api/admin/waitlist/'+id,{method:'DELETE',headers:H()}); loadWaitlist(); }
+
+    // ซ่อมข้อมูลที่นั่ง: ดึงผู้สมัครที่ "หลุด" จากรอบ (จากการแก้ไขครั้งก่อน) กลับเข้ารอบ
+    async function repairSeats(){
+      if(!confirm('ซ่อมข้อมูลที่นั่ง? จะดึงผู้สมัครที่หลุดจากรอบ (กิจกรรมที่มีรอบเดียว) กลับเข้ารอบให้ถูกต้อง'))return;
+      const res = await fetch('/api/admin/repair-seats',{method:'POST',headers:H()});
+      const d = await res.json();
+      alert('ซ่อมเสร็จ ✓\nดึงกลับเข้ารอบสำเร็จ: '+(d.fixed||0)+' รายการ'+((d.unresolved)?'\nที่ต้องตรวจเอง (กิจกรรมหลายรอบ): '+d.unresolved+' รายการ':''));
+      loadAll();
+    }
 
     // ลบใบสมัครถาวร (สำหรับเคลียร์ข้อมูลทดสอบ) — คืนที่นั่งให้รอบทันที
     async function delReg(id, name){
