@@ -102,6 +102,36 @@ export async function sendTestEmail() {
   }
 }
 
+// Send a one-time passcode (OTP) to verify a participant before showing their data.
+export async function sendOtpEmail(to, code) {
+  if (!emailConfigured()) return { sent: false, skipped: 'not_configured' };
+  if (!to) return { sent: false, skipped: 'no_email' };
+  const subject = `รหัสยืนยัน (OTP) ${code} · BARNBARN Workshop`;
+  const html = `
+  <div style="background:#fbf6ee;padding:28px 0;font-family:'Segoe UI',Tahoma,sans-serif">
+    <div style="max-width:460px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #efe3d2">
+      <div style="background:#f6a531;padding:20px 24px;color:#fff">
+        <div style="font-size:20px;font-weight:800">🌿 BARNBARN Workshop</div>
+        <div style="font-size:14px;opacity:.95;margin-top:2px">รหัสยืนยันสำหรับดูการสมัครของคุณ</div>
+      </div>
+      <div style="padding:24px">
+        <p style="color:#2f2a24;font-size:15px;margin:0 0 14px">กรอกรหัสนี้เพื่อดูข้อมูลการสมัครของคุณ:</p>
+        <div style="text-align:center;font-size:38px;font-weight:800;letter-spacing:8px;color:#e2653a;background:#fbf1e6;border-radius:12px;padding:16px 0">${code}</div>
+        <p style="color:#8a6d4b;font-size:13px;margin:16px 0 0;text-align:center">รหัสหมดอายุใน 10 นาที · หากคุณไม่ได้เป็นผู้ขอ กรุณาเพิกเฉยอีเมลนี้</p>
+      </div>
+    </div>
+  </div>`;
+  const text = `รหัสยืนยัน (OTP) ของคุณคือ ${code} — ใช้ดูการสมัคร BARNBARN Workshop (หมดอายุใน 10 นาที)`;
+  try {
+    await deliver(to, subject, html, text);
+    return { sent: true };
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : e);
+    console.error('📧 OTP send error:', msg);
+    return { sent: false, error: msg };
+  }
+}
+
 const money = (n) => Number(n || 0).toLocaleString('th-TH');
 
 function fmtDate(d) {
