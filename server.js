@@ -86,7 +86,7 @@ app.get('/api/payment-info', (req, res) => {
   });
 });
 
-// ---------- public: look up my own registrations by phone (OTP-protected) ----------
+// ---------- public: look up my own registrations by phone ----------
 const digitsOnly = (s) => String(s || '').replace(/\D/g, '');
 function matchByPhone(phone) {
   const q = digitsOnly(phone);
@@ -106,60 +106,10 @@ function toPublicRegs(matched) {
     };
   });
 }
-function maskEmail(e) {
-  const [u, d] = String(e).split('@');
-  if (!d) return e;
-  const shown = u.slice(0, Math.min(2, u.length));
-  return `${shown}${'*'.repeat(Math.max(1, u.length - shown.length))}@${d}`;
-}
 
-// in-memory OTP store: phone(digits) -> { code, exp, tries }
-const otpStore = new Map();
-const OTP_TTL = 10 * 60 * 1000; // 10 min
-const genOtp = () => String(Math.floor(100000 + Math.random() * 900000));
-
-// Step 1: request an OTP (emailed to the address used at signup)
-app.post('/api/my/request-otp', async (req, res) => {
-  const phone = digitsOnly(req.body && req.body.phone);
-  if (phone.length < 8) return res.status(400).json({ error: 'กรุณากรอกเบอร์โทรให้ถูกต้อง (อย่างน้อย 8 หลัก)' });
-  const matched = matchByPhone(phone);
-  if (!matched.length) return res.json({ count: 0, registrations: [] });
-  // pick the most recent registration that has an email
-  const withEmail = matched
-    .filter((r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email))
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-  // No email on file, or email sending not configured -> show directly (nothing to OTP)
-  if (!withEmail || !emailConfigured()) {
-    return res.json({ needOtp: false, count: matched.length, registrations: toPublicRegs(matched) });
-  }
-  const code = genOtp();
-  otpStore.set(phone, { code, exp: Date.now() + OTP_TTL, tries: 0 });
-  const r = await sendOtpEmail(withEmail.email, code);
-  if (!r.sent) {
-    otpStore.delete(phone);
-    return res.status(502).json({ error: 'ส่งอีเมล OTP ไม่สำเร็จ กรุณาลองใหม่ หรือทักผู้จัดทาง LINE' });
-  }
-  res.json({ needOtp: true, emailMasked: maskEmail(withEmail.email) });
-});
-
-// Step 2: verify OTP -> return the registrations
-app.post('/api/my/verify-otp', (req, res) => {
-  const phone = digitsOnly(req.body && req.body.phone);
-  const code = String((req.body && req.body.code) || '').trim();
-  const rec = otpStore.get(phone);
-  if (!rec || Date.now() > rec.exp) { otpStore.delete(phone); return res.status(400).json({ error: 'รหัสหมดอายุ กรุณาขอรหัสใหม่' }); }
-  if (rec.tries >= 5) { otpStore.delete(phone); return res.status(429).json({ error: 'กรอกผิดหลายครั้งเกินไป กรุณาขอรหัสใหม่' }); }
-  if (code !== rec.code) { rec.tries++; return res.status(400).json({ error: 'รหัสไม่ถูกต้อง' }); }
-  otpStore.delete(phone);
-  const matched = matchByPhone(phone);
-  res.json({ ok: true, count: matched.length, registrations: toPublicRegs(matched) });
-});
-
-// Legacy direct lookup kept only for no-email data (email-having records require OTP)
 app.get('/api/my-registrations', (req, res) => {
-  const matched = matchByPhone(req.query.phone);
   if (digitsOnly(req.query.phone).length < 8) return res.status(400).json({ error: 'กรุณากรอกเบอร์โทรให้ถูกต้อง (อย่างน้อย 8 หลัก)' });
-  if (matched.some((r) => r.email)) return res.status(403).json({ error: 'ต้องยืนยันด้วยรหัส OTP', needOtp: true });
+  const matched = matchByPhone(req.query.phone);
   res.json({ count: matched.length, registrations: toPublicRegs(matched) });
 });
 
