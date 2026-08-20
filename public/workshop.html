@@ -156,6 +156,7 @@
           rep: { name:'', nickname:'', age:'', phone:'', province:'', email:'', lineId:'', source:'' },
           members: Array.from({ length: Math.max(0, PEOPLE - 1) }, () => ({ name:'', nickname:'', age:'' })),
           health: { allergy:'', foodAvoid:'', medical:'' },
+          healthHas: { allergy:null, foodAvoid:null, medical:null }, // null = ยังไม่เลือก, true = มี, false = ไม่มี
           emergency: { name:'', phone:'', relation:'' },
           note: ''
         };
@@ -261,15 +262,15 @@
     }
 
     function healthRow(label, key, radioName, textId, placeholder) {
-      const has = !!FORM.health[key];
+      const has = FORM.healthHas[key]; // null | true | false
       return `
         <div class="field">
-          <label>${label}</label>
+          <label>${label} <span class="req">*</span></label>
           <div style="display:flex;gap:20px;margin-bottom:6px">
-            <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="${radioName}" value="none" ${has?'':'checked'} onchange="healthToggle('${radioName}','${textId}')" style="width:auto">ไม่มี</label>
-            <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="${radioName}" value="yes" ${has?'checked':''} onchange="healthToggle('${radioName}','${textId}')" style="width:auto">มี</label>
+            <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="${radioName}" value="none" ${has===false?'checked':''} onchange="healthToggle('${radioName}','${textId}')" style="width:auto">ไม่มี</label>
+            <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="${radioName}" value="yes" ${has===true?'checked':''} onchange="healthToggle('${radioName}','${textId}')" style="width:auto">มี</label>
           </div>
-          <input id="${textId}" class="${has?'':'hidden'}" value="${escAttr(FORM.health[key])}" placeholder="${placeholder}">
+          <input id="${textId}" class="${has===true?'':'hidden'}" value="${escAttr(FORM.health[key])}" placeholder="${placeholder}">
         </div>`;
     }
     function healthToggle(radioName, textId) {
@@ -342,8 +343,13 @@
           FORM.members[step-1] = { name: val('m-name'), nickname: val('m-nick'), age: val('m-age') };
         }
       } else {
-        const spec = (radioName, textId) => document.querySelector(`input[name="${radioName}"]:checked`)?.value === 'yes' ? val(textId) : '';
-        FORM.health = { allergy: spec('allergy-has','h-allergy'), foodAvoid: spec('food-has','h-food'), medical: spec('medical-has','h-medical') };
+        const pick = (radioName) => document.querySelector(`input[name="${radioName}"]:checked`)?.value ?? null; // 'yes' | 'none' | null
+        const rec = (radioName, key, textId) => {
+          const v = pick(radioName);
+          FORM.healthHas[key] = v == null ? null : (v === 'yes');
+          FORM.health[key] = v === 'yes' ? val(textId) : '';
+        };
+        rec('allergy-has','allergy','h-allergy'); rec('food-has','foodAvoid','h-food'); rec('medical-has','medical','h-medical');
         FORM.emergency = { name: val('e-name'), phone: val('e-phone'), relation: val('e-rel') };
         FORM.note = val('f-note');
       }
@@ -364,10 +370,13 @@
         if (!m.name) return `กรุณากรอกชื่อผู้เข้าร่วมคนที่ ${step+1}`;
         if (!m.age) return `กรุณากรอกอายุผู้เข้าร่วมคนที่ ${step+1}`;
       } else {
-        const isYes = (radioName) => document.querySelector(`input[name="${radioName}"]:checked`)?.value === 'yes';
-        if (isYes('allergy-has') && !val('h-allergy')) return 'กรุณาระบุอาหารที่แพ้ หรือเลือก “ไม่มี”';
-        if (isYes('food-has') && !val('h-food')) return 'กรุณาระบุอาหารที่ไม่รับประทาน หรือเลือก “ไม่มี”';
-        if (isYes('medical-has') && !val('h-medical')) return 'กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”';
+        const pick = (radioName) => document.querySelector(`input[name="${radioName}"]:checked`)?.value ?? null;
+        if (!pick('allergy-has')) return 'กรุณาเลือกว่า “มี” หรือ “ไม่มี” การแพ้อาหาร';
+        if (pick('allergy-has') === 'yes' && !val('h-allergy')) return 'กรุณาระบุอาหารที่แพ้ หรือเลือก “ไม่มี”';
+        if (!pick('food-has')) return 'กรุณาเลือกว่า “มี” หรือ “ไม่มี” อาหารที่ไม่รับประทาน';
+        if (pick('food-has') === 'yes' && !val('h-food')) return 'กรุณาระบุอาหารที่ไม่รับประทาน หรือเลือก “ไม่มี”';
+        if (!pick('medical-has')) return 'กรุณาเลือกว่า “มี” หรือ “ไม่มี” โรคประจำตัว';
+        if (pick('medical-has') === 'yes' && !val('h-medical')) return 'กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”';
         const e = FORM.emergency;
         if (!e.name || e.phone.replace(/\D/g,'').length < 8 || !e.relation) return 'กรุณากรอกข้อมูลผู้ติดต่อฉุกเฉินให้ครบ (ชื่อ เบอร์ ความสัมพันธ์)';
       }
