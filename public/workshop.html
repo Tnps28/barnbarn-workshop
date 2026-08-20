@@ -260,14 +260,33 @@
         </div>`;
     }
 
+    function healthRow(label, key, radioName, textId, placeholder) {
+      const has = !!FORM.health[key];
+      return `
+        <div class="field">
+          <label>${label}</label>
+          <div style="display:flex;gap:20px;margin-bottom:6px">
+            <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="${radioName}" value="none" ${has?'':'checked'} onchange="healthToggle('${radioName}','${textId}')" style="width:auto">ไม่มี</label>
+            <label style="font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="${radioName}" value="yes" ${has?'checked':''} onchange="healthToggle('${radioName}','${textId}')" style="width:auto">มี</label>
+          </div>
+          <input id="${textId}" class="${has?'':'hidden'}" value="${escAttr(FORM.health[key])}" placeholder="${placeholder}">
+        </div>`;
+    }
+    function healthToggle(radioName, textId) {
+      const yes = document.querySelector(`input[name="${radioName}"]:checked`).value === 'yes';
+      const box = document.getElementById(textId);
+      box.classList.toggle('hidden', !yes);
+      if (!yes) box.value = '';
+    }
+
     function healthFields() {
-      const h = FORM.health, e = FORM.emergency;
-      const hintPerson = PEOPLE > 1 ? ' (ถ้ามีหลายคน ระบุชื่อด้วย เช่น สมชาย: แพ้กุ้ง)' : '';
+      const e = FORM.emergency;
+      const hintPerson = PEOPLE > 1 ? ' (ถ้าเจาะจงคน ระบุชื่อด้วย เช่น สมชาย: กุ้ง)' : '';
       return `
         <p class="hint" style="margin-top:0">ข้อมูลด้านล่างกรอกรวมครั้งเดียวสำหรับทุกคน${PEOPLE>1?' — โปรดระบุชื่อคนถ้าเจาะจงเฉพาะบางคน':''}</p>
-        <div class="field"><label>แพ้อาหาร</label><input id="h-allergy" value="${escAttr(h.allergy)}" placeholder="เว้นว่าง = ไม่มี${hintPerson}"></div>
-        <div class="field"><label>อาหารที่ไม่รับประทาน</label><input id="h-food" value="${escAttr(h.foodAvoid)}" placeholder="เช่น เนื้อวัว หมู อาหารเจ/มังสวิรัติ${hintPerson}"></div>
-        <div class="field"><label>โรคประจำตัว</label><input id="h-medical" value="${escAttr(h.medical)}" placeholder="เว้นว่าง = ไม่มี${hintPerson}"></div>
+        ${healthRow('การแพ้อาหาร','allergy','allergy-has','h-allergy','ระบุอาหารที่แพ้ เช่น กุ้ง ถั่ว นม'+hintPerson)}
+        ${healthRow('อาหารที่ไม่รับประทาน','foodAvoid','food-has','h-food','เช่น เนื้อวัว หมู อาหารเจ/มังสวิรัติ'+hintPerson)}
+        ${healthRow('โรคประจำตัว','medical','medical-has','h-medical','ระบุโรคประจำตัว เช่น หอบหืด ภูมิแพ้'+hintPerson)}
         <hr style="border:none;border-top:1px dashed var(--line);margin:14px 0">
         <h3 style="color:var(--brown);margin:0 0 6px">ผู้ติดต่อฉุกเฉิน <span class="req">*</span></h3>
         <div class="field"><label>ชื่อผู้ติดต่อฉุกเฉิน <span class="req">*</span></label><input id="e-name" value="${escAttr(e.name)}" placeholder="ชื่อ-นามสกุล ผู้ติดต่อได้กรณีฉุกเฉิน"></div>
@@ -323,7 +342,8 @@
           FORM.members[step-1] = { name: val('m-name'), nickname: val('m-nick'), age: val('m-age') };
         }
       } else {
-        FORM.health = { allergy: val('h-allergy'), foodAvoid: val('h-food'), medical: val('h-medical') };
+        const spec = (radioName, textId) => document.querySelector(`input[name="${radioName}"]:checked`)?.value === 'yes' ? val(textId) : '';
+        FORM.health = { allergy: spec('allergy-has','h-allergy'), foodAvoid: spec('food-has','h-food'), medical: spec('medical-has','h-medical') };
         FORM.emergency = { name: val('e-name'), phone: val('e-phone'), relation: val('e-rel') };
         FORM.note = val('f-note');
       }
@@ -344,6 +364,10 @@
         if (!m.name) return `กรุณากรอกชื่อผู้เข้าร่วมคนที่ ${step+1}`;
         if (!m.age) return `กรุณากรอกอายุผู้เข้าร่วมคนที่ ${step+1}`;
       } else {
+        const isYes = (radioName) => document.querySelector(`input[name="${radioName}"]:checked`)?.value === 'yes';
+        if (isYes('allergy-has') && !val('h-allergy')) return 'กรุณาระบุอาหารที่แพ้ หรือเลือก “ไม่มี”';
+        if (isYes('food-has') && !val('h-food')) return 'กรุณาระบุอาหารที่ไม่รับประทาน หรือเลือก “ไม่มี”';
+        if (isYes('medical-has') && !val('h-medical')) return 'กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”';
         const e = FORM.emergency;
         if (!e.name || e.phone.replace(/\D/g,'').length < 8 || !e.relation) return 'กรุณากรอกข้อมูลผู้ติดต่อฉุกเฉินให้ครบ (ชื่อ เบอร์ ความสัมพันธ์)';
       }
