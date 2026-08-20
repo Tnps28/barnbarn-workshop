@@ -368,8 +368,20 @@ export function createRegistration(payload) {
     province: payload.province || '',
     source: payload.source || '',
     people: Number(payload.people) || 1,
+    nickname: payload.nickname || '',
+    age: payload.age || '',
     allergy: payload.allergy || '',
+    foodAvoid: payload.foodAvoid || '',
     medical: payload.medical || '',
+    emergencyName: payload.emergencyName || '',
+    emergencyPhone: payload.emergencyPhone || '',
+    emergencyRelation: payload.emergencyRelation || '',
+    // ผู้เข้าร่วมคนที่ 2..N (ตัวแทน = คนที่ 1 อยู่ในฟิลด์หลัก) — [{name, nickname, age}]
+    members: Array.isArray(payload.members) ? payload.members.map((m) => ({
+      name: String(m.name || '').trim(),
+      nickname: String(m.nickname || '').trim(),
+      age: String(m.age || '').trim()
+    })) : [],
     addons: Array.isArray(payload.addons) ? payload.addons : [],
     note: payload.note || '',
     adminNote: '',

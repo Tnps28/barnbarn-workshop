@@ -139,12 +139,21 @@ app.post('/api/register', (req, res) => {
   if (!String(req.body.province || '').trim()) {
     return res.status(400).json({ error: 'กรุณาเลือกจังหวัด' });
   }
+  // ผู้ติดต่อฉุกเฉิน (จำเป็น)
+  if (!String(req.body.emergencyName || '').trim() || !String(req.body.emergencyPhone || '').trim() || !String(req.body.emergencyRelation || '').trim()) {
+    return res.status(400).json({ error: 'กรุณากรอกข้อมูลผู้ติดต่อฉุกเฉินให้ครบ (ชื่อ เบอร์ และความสัมพันธ์)' });
+  }
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
   if (!ws || !round) return res.status(404).json({ error: 'ไม่พบเวิร์กช็อปหรือรอบที่เลือก' });
 
   db.expireStale();
   const people = Number(req.body.people) || 1;
+  // ผู้เข้าร่วมคนที่ 2..N ต้องมีชื่อครบตามจำนวน
+  const members = (Array.isArray(req.body.members) ? req.body.members : []).slice(0, Math.max(0, people - 1));
+  if (members.length < people - 1 || members.some((m) => !String(m && m.name || '').trim())) {
+    return res.status(400).json({ error: `กรุณากรอกชื่อผู้เข้าร่วมให้ครบทั้ง ${people} ท่าน` });
+  }
   const remaining = round.seats - db.seatsTaken(workshopId, roundId);
   if (people > remaining) {
     return res.status(400).json({ error: `ที่นั่งเหลือ ${remaining} ที่ ไม่พอสำหรับ ${people} ท่าน` });
@@ -165,8 +174,15 @@ app.post('/api/register', (req, res) => {
     province: req.body.province,
     source: req.body.source,
     people,
+    nickname: req.body.nickname,
+    age: req.body.age,
     allergy: req.body.allergy,
+    foodAvoid: req.body.foodAvoid,
     medical: req.body.medical,
+    emergencyName: req.body.emergencyName,
+    emergencyPhone: req.body.emergencyPhone,
+    emergencyRelation: req.body.emergencyRelation,
+    members,
     addons: selectedAddons.map((a) => ({ name: a.name, price: a.price })),
     note: req.body.note,
     amount: round.price * people + addonsTotal
