@@ -89,13 +89,29 @@
       } catch { return d; }
     };
 
+    const todayStr = () => new Date().toISOString().slice(0,10);
+
+    // จัดลำดับ: เปิดรับ+ที่ว่าง (ใกล้สุดก่อน) → อนาคตแต่เต็ม → จบไปแล้ว
+    function sortKey(w) {
+      const today = todayStr(), rounds = w.rounds || [];
+      const openFut = rounds.filter(r => r.date >= today && r.remaining > 0).map(r => r.date).sort();
+      if (openFut.length) return { cat:0, key:openFut[0] };
+      const fut = rounds.filter(r => r.date >= today).map(r => r.date).sort();
+      if (fut.length) return { cat:1, key:fut[0] };
+      const past = rounds.map(r => r.date).sort();
+      return { cat:2, key:'~' + (past[past.length-1] || '') };
+    }
+
     async function load() {
-      const res = await fetch('/api/workshops');
-      const items = await res.json();
+      const [items, calEvents] = await Promise.all([
+        fetch('/api/workshops').then(r => r.json()).catch(() => []),
+        fetch('/api/calendar').then(r => r.json()).catch(() => [])
+      ]);
+      items.sort((a,b) => { const A=sortKey(a), B=sortKey(b); return A.cat-B.cat || (A.key<B.key?-1:A.key>B.key?1:0); });
       const el = document.getElementById('list');
-      if (!items.length) { el.innerHTML = '<p class="muted">ยังไม่มีกิจกรรมเปิดรับสมัครในขณะนี้</p>'; }
-      else { el.innerHTML = items.map(cardHtml).join(''); }
-      buildCalendar(items);
+      if (!items.length) el.innerHTML = '<p class="muted">ยังไม่มีกิจกรรมเปิดรับสมัครในขณะนี้</p>';
+      else el.innerHTML = items.map(cardHtml).join('');
+      buildCalendar(calEvents);
     }
 
     // ---------- อีโมจิสื่อความหมายของแต่ละกิจกรรม ----------
@@ -113,14 +129,14 @@
     const pad = (n) => String(n).padStart(2,'0');
     let CAL_EVENTS = {}, calView = new Date();
 
-    function buildCalendar(items) {
+    function buildCalendar(events) {
       CAL_EVENTS = {};
       let earliest = null;
-      items.forEach(w => (w.rounds||[]).forEach(r => {
-        if (!r.date) return;
-        (CAL_EVENTS[r.date] = CAL_EVENTS[r.date] || []).push({ title:w.title, id:w.id, time:r.time, remaining:r.remaining, price:r.price, emoji:wsEmoji(w) });
-        const d = new Date(r.date+'T00:00:00'); if (!earliest || d < earliest) earliest = d;
-      }));
+      (events || []).forEach(ev => {
+        if (!ev.date) return;
+        (CAL_EVENTS[ev.date] = CAL_EVENTS[ev.date] || []).push({ title:ev.title, id:ev.id, time:ev.time, remaining:ev.remaining, price:ev.price, emoji:wsEmoji(ev), past:ev.past });
+        const d = new Date(ev.date+'T00:00:00'); if (!earliest || d < earliest) earliest = d;
+      });
       const now = new Date(); now.setHours(0,0,0,0);
       const upcoming = Object.keys(CAL_EVENTS).map(k=>new Date(k+'T00:00:00')).filter(d=>d>=now).sort((a,b)=>a-b)[0];
       const start = upcoming || earliest || now;
@@ -152,11 +168,14 @@
     }
     const calFull = (k) => { try { return new Date(k+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } catch { return k; } };
     function calRow(e) {
-      const seat = e.remaining>0 ? `<span class="muted">เหลือ ${e.remaining} ที่</span>` : `<span style="color:var(--danger)">เต็ม</span>`;
       const price = e.price>0 ? money(e.price)+' บาท' : 'ฟรี';
-      return `<div class="rowline">
-        <span class="k"><span style="font-size:22px">${e.emoji}</span> ${e.title}<br><span class="muted" style="font-size:13px">🕒 ${e.time||''} · ${price} · ${seat}</span></span>
-        <span class="v"><a class="btn btn-primary btn-sm" href="/workshop?id=${e.id}">ดู & สมัคร</a></span>
+      const seat = e.past ? '' : ` · ${e.remaining>0 ? '<span class="muted">เหลือ '+e.remaining+' ที่</span>' : '<span style="color:var(--danger)">เต็ม</span>'}`;
+      const right = e.past
+        ? `<span class="muted">จบแล้ว</span>`
+        : `<a class="btn btn-primary btn-sm" href="/workshop?id=${e.id}">ดู & สมัคร</a>`;
+      return `<div class="rowline" style="${e.past?'opacity:.65':''}">
+        <span class="k"><span style="font-size:22px">${e.emoji}</span> ${e.title}<br><span class="muted" style="font-size:13px">🕒 ${e.time||''} · ${price}${seat}</span></span>
+        <span class="v">${right}</span>
       </div>`;
     }
     function calShowDay(k) {
