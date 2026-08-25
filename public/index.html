@@ -7,12 +7,26 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    .cal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .cal-dow{text-align:center;font-weight:700;color:var(--brown);font-size:13px;padding:4px 0}
+    .cal-cell{min-height:74px;border:1px solid var(--line);border-radius:10px;padding:6px;background:#fff}
+    .cal-cell.empty{background:transparent;border:none}
+    .cal-cell.today{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange) inset}
+    .cal-cell.has{cursor:pointer;background:#fbf1e2;border-color:#e7b44a}
+    .cal-cell.has:hover{filter:brightness(.98)}
+    .cal-daynum{font-size:13px;color:var(--ink-soft)}
+    .cal-emojis{font-size:22px;line-height:1.25;margin-top:2px}
+    .cal-cnt{font-size:10.5px;color:var(--brown);font-weight:700}
+    @media(max-width:560px){.cal-cell{min-height:58px}.cal-emojis{font-size:17px}}
+  </style>
 </head>
 <body>
   <nav class="nav">
     <div class="brand"><span class="logo">🌿</span> BARNBARN</div>
     <div style="display:flex;gap:18px;align-items:center">
-      <a class="plain" href="/calendar.html">📅 ปฏิทินกิจกรรม</a>
+      <a class="plain" href="#calendar">📅 ปฏิทินกิจกรรม</a>
       <a class="plain" href="/my">📋 ดูการสมัครของฉัน</a>
     </div>
   </nav>
@@ -35,6 +49,21 @@
     <h2 class="section-title">เวิร์กช็อปที่เปิดรับสมัคร</h2>
     <div id="list" class="grid"><p class="muted">กำลังโหลด…</p></div>
   </main>
+
+  <section class="wrap" id="calendar" style="scroll-margin-top:70px">
+    <h2 class="section-title">📅 ปฏิทินกิจกรรม</h2>
+    <p class="muted" style="text-align:center;margin-top:-8px">ดูภาพรวมแต่ละเดือน · แตะวันที่มีกิจกรรมเพื่อดูรายละเอียดและสมัคร</p>
+    <div class="panel">
+      <div class="cal-head">
+        <button class="btn btn-ghost btn-sm" onclick="calMove(-1)">‹ เดือนก่อน</button>
+        <h3 id="cal-title" style="margin:0;color:var(--brown)">—</h3>
+        <button class="btn btn-ghost btn-sm" onclick="calMove(1)">เดือนถัดไป ›</button>
+      </div>
+      <div class="cal-grid" id="cal-dow"></div>
+      <div class="cal-grid" id="cal" style="margin-top:6px"></div>
+    </div>
+    <div id="cal-daylist"></div>
+  </section>
 
   <div class="footer">
     <div class="fline">🌿 BARNBARN Workshop · ติดต่อสอบถาม / แจ้งชำระเงินเพิ่มเติมได้ทาง LINE Official Account</div>
@@ -64,8 +93,83 @@
       const res = await fetch('/api/workshops');
       const items = await res.json();
       const el = document.getElementById('list');
-      if (!items.length) { el.innerHTML = '<p class="muted">ยังไม่มีเวิร์กช็อปเปิดรับสมัครในขณะนี้</p>'; return; }
-      el.innerHTML = items.map(cardHtml).join('');
+      if (!items.length) { el.innerHTML = '<p class="muted">ยังไม่มีกิจกรรมเปิดรับสมัครในขณะนี้</p>'; }
+      else { el.innerHTML = items.map(cardHtml).join(''); }
+      buildCalendar(items);
+    }
+
+    // ---------- อีโมจิสื่อความหมายของแต่ละกิจกรรม ----------
+    function wsEmoji(w) {
+      if (w.emoji) return w.emoji;
+      const t = ((w.title||'') + ' ' + (w.category||'') + ' ' + (w.subtitle||'')).toLowerCase();
+      const map = [['สบู่','🧼'],['เทียน','🕯️'],['เซรามิก','🏺'],['ปั้น','🏺'],['ดินเผา','🏺'],['เพนต์','🎨'],['วาด','🎨'],['สีน้ำ','🎨'],['ถัก','🧶'],['ไหมพรม','🧶'],['ปัก','🧵'],['ดอกไม้','💐'],['เบเกอรี','🧁'],['เค้ก','🍰'],['ขนม','🧁'],['อาหาร','🍳'],['กาแฟ','☕'],['ชา','🍵'],['น้ำหอม','🌸'],['เครื่องหอม','🌸'],['หนัง','👜'],['แก้ว','🥃'],['ต้นไม้','🪴'],['สวน','🪴'],['โยคะ','🧘'],['ถ่ายรูป','📷'],['เพลง','🎵'],['เต้น','💃'],['เขียน','✍️'],['เว็บ','💻']];
+      for (const [k,e] of map) if (t.includes(k)) return e;
+      return '🎨';
+    }
+
+    // ---------- ปฏิทินกิจกรรม (ฝังท้ายหน้า) ----------
+    const TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const TH_DOW = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+    const pad = (n) => String(n).padStart(2,'0');
+    let CAL_EVENTS = {}, calView = new Date();
+
+    function buildCalendar(items) {
+      CAL_EVENTS = {};
+      let earliest = null;
+      items.forEach(w => (w.rounds||[]).forEach(r => {
+        if (!r.date) return;
+        (CAL_EVENTS[r.date] = CAL_EVENTS[r.date] || []).push({ title:w.title, id:w.id, time:r.time, remaining:r.remaining, price:r.price, emoji:wsEmoji(w) });
+        const d = new Date(r.date+'T00:00:00'); if (!earliest || d < earliest) earliest = d;
+      }));
+      const now = new Date(); now.setHours(0,0,0,0);
+      const upcoming = Object.keys(CAL_EVENTS).map(k=>new Date(k+'T00:00:00')).filter(d=>d>=now).sort((a,b)=>a-b)[0];
+      const start = upcoming || earliest || now;
+      calView = new Date(start.getFullYear(), start.getMonth(), 1);
+      document.getElementById('cal-dow').innerHTML = TH_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+      calRender();
+    }
+    function calMove(delta){ calView = new Date(calView.getFullYear(), calView.getMonth()+delta, 1); calRender(); }
+    function calRender() {
+      const y = calView.getFullYear(), m = calView.getMonth();
+      document.getElementById('cal-title').textContent = `${TH_MONTHS[m]} ${y+543}`;
+      const first = new Date(y,m,1).getDay(), days = new Date(y,m+1,0).getDate();
+      const today = new Date(); today.setHours(0,0,0,0);
+      let cells = '';
+      for (let i=0;i<first;i++) cells += `<div class="cal-cell empty"></div>`;
+      for (let d=1;d<=days;d++) {
+        const k = `${y}-${pad(m+1)}-${pad(d)}`;
+        const evs = CAL_EVENTS[k] || [];
+        const isToday = (new Date(y,m,d).getTime()===today.getTime());
+        const cls = 'cal-cell'+(evs.length?' has':'')+(isToday?' today':'');
+        const emojis = evs.slice(0,3).map(e=>e.emoji).join('') + (evs.length>3?'…':'');
+        cells += `<div class="${cls}"${evs.length?` onclick="calShowDay('${k}')"`:''}>
+          <div class="cal-daynum">${d}</div>
+          ${evs.length?`<div class="cal-emojis">${emojis}</div><div class="cal-cnt">${evs.length} กิจกรรม</div>`:''}
+        </div>`;
+      }
+      document.getElementById('cal').innerHTML = cells;
+      calShowMonth(y, m);
+    }
+    const calFull = (k) => { try { return new Date(k+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } catch { return k; } };
+    function calRow(e) {
+      const seat = e.remaining>0 ? `<span class="muted">เหลือ ${e.remaining} ที่</span>` : `<span style="color:var(--danger)">เต็ม</span>`;
+      const price = e.price>0 ? money(e.price)+' บาท' : 'ฟรี';
+      return `<div class="rowline">
+        <span class="k"><span style="font-size:22px">${e.emoji}</span> ${e.title}<br><span class="muted" style="font-size:13px">🕒 ${e.time||''} · ${price} · ${seat}</span></span>
+        <span class="v"><a class="btn btn-primary btn-sm" href="/workshop?id=${e.id}">ดู & สมัคร</a></span>
+      </div>`;
+    }
+    function calShowDay(k) {
+      const evs = CAL_EVENTS[k] || [];
+      document.getElementById('cal-daylist').innerHTML = `<div class="panel"><h3 style="margin-top:0;color:var(--brown)">📅 ${calFull(k)}</h3>${evs.map(calRow).join('')}</div>`;
+      document.getElementById('cal-daylist').scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+    function calShowMonth(y,m) {
+      const keys = Object.keys(CAL_EVENTS).filter(k=>{ const d=new Date(k+'T00:00:00'); return d.getFullYear()===y && d.getMonth()===m; }).sort();
+      const box = document.getElementById('cal-daylist');
+      if (!keys.length) { box.innerHTML = `<div class="panel muted" style="text-align:center">เดือนนี้ยังไม่มีกิจกรรม · ลองดูเดือนถัดไป</div>`; return; }
+      box.innerHTML = `<div class="panel"><h3 style="margin-top:0;color:var(--brown)">กิจกรรมในเดือนนี้</h3>
+        ${keys.map(k=>`<div style="margin-bottom:6px"><b style="color:var(--brown)">${calFull(k)}</b>${(CAL_EVENTS[k]||[]).map(calRow).join('')}</div>`).join('')}</div>`;
     }
 
     function cardHtml(w) {
