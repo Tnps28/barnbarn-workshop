@@ -158,7 +158,7 @@
           health: { allergy:'', foodAvoid:'', medical:'' },
           healthHas: { allergy:null, foodAvoid:null, medical:null }, // null = ยังไม่เลือก, true = มี, false = ไม่มี
           emergency: { name:'', phone:'', relation:'' },
-          note: ''
+          note: '', pdpa: false
         };
       }
       renderInfo(0);
@@ -295,7 +295,13 @@
           <div class="field" style="flex:1"><label>เบอร์ติดต่อฉุกเฉิน <span class="req">*</span></label><input id="e-phone" inputmode="tel" value="${escAttr(e.phone)}" placeholder="08x-xxx-xxxx"></div>
           <div class="field" style="flex:1"><label>ความสัมพันธ์ <span class="req">*</span></label><input id="e-rel" value="${escAttr(e.relation)}" placeholder="เช่น พ่อ แม่ พี่ เพื่อน"></div>
         </div>
-        <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="f-note" placeholder="คำถามอื่น ๆ">${escAttr(FORM.note)}</textarea></div>`;
+        <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="f-note" placeholder="คำถามอื่น ๆ">${escAttr(FORM.note)}</textarea></div>
+        <div class="field" style="background:#fbf1e2;border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+          <label style="font-weight:400;display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin:0">
+            <input type="checkbox" id="pdpa" ${FORM.pdpa?'checked':''} style="width:auto;margin-top:3px">
+            <span style="font-size:14px;line-height:1.5">ข้าพเจ้า<b>ยินยอม</b>ให้ผู้จัดเก็บ รวบรวม และใช้ข้อมูลส่วนบุคคลข้างต้น (รวมถึงข้อมูลสุขภาพ) เพื่อการลงทะเบียนและติดต่อเกี่ยวกับกิจกรรมนี้ ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA) <span class="req">*</span><br><a href="/privacy.html" target="_blank" rel="noopener" style="font-size:12px">อ่านนโยบายความเป็นส่วนตัว ↗</a></span>
+          </label>
+        </div>`;
     }
 
     function renderInfo(step) {
@@ -352,6 +358,7 @@
         rec('allergy-has','allergy','h-allergy'); rec('food-has','foodAvoid','h-food'); rec('medical-has','medical','h-medical');
         FORM.emergency = { name: val('e-name'), phone: val('e-phone'), relation: val('e-rel') };
         FORM.note = val('f-note');
+        FORM.pdpa = !!document.getElementById('pdpa')?.checked;
       }
     }
 
@@ -379,6 +386,7 @@
         if (pick('medical-has') === 'yes' && !val('h-medical')) return 'กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”';
         const e = FORM.emergency;
         if (!e.name || e.phone.replace(/\D/g,'').length < 8 || !e.relation) return 'กรุณากรอกข้อมูลผู้ติดต่อฉุกเฉินให้ครบ (ชื่อ เบอร์ ความสัมพันธ์)';
+        if (!document.getElementById('pdpa')?.checked) return 'กรุณาติ๊กยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล (PDPA) ก่อนสมัคร';
       }
       return '';
     }
@@ -405,6 +413,7 @@
         allergy: FORM.health.allergy, foodAvoid: FORM.health.foodAvoid, medical: FORM.health.medical,
         emergencyName: FORM.emergency.name, emergencyPhone: FORM.emergency.phone, emergencyRelation: FORM.emergency.relation,
         members: FORM.members,
+        pdpaConsent: FORM.pdpa === true,
         addonIds: SELECTED_ADDONS.map(a => a.id),
         note: FORM.note
       };

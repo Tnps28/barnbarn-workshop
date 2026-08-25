@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ปฏิทินกิจกรรม — BARNBARN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    .cal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+    .cal-dow { text-align:center; font-weight:700; color:var(--brown); font-size:13px; padding:4px 0; }
+    .cal-cell { min-height:64px; border:1px solid var(--line); border-radius:10px; padding:6px; background:#fff; position:relative; }
+    .cal-cell.empty { background:transparent; border:none; }
+    .cal-cell.today { border-color:var(--orange); box-shadow:0 0 0 1px var(--orange) inset; }
+    .cal-cell.has { cursor:pointer; background:#fbf1e2; border-color:var(--yellow,#e7b44a); }
+    .cal-cell.has:hover { filter:brightness(.98); }
+    .cal-daynum { font-size:13px; color:var(--ink-soft); }
+    .cal-dot { margin-top:4px; font-size:11px; color:#fff; background:var(--orange); border-radius:20px; padding:1px 7px; display:inline-block; font-weight:700; }
+    .cal-mini { font-size:10.5px; color:var(--brown); margin-top:2px; line-height:1.25; overflow:hidden; }
+    @media (max-width:560px){ .cal-cell{ min-height:52px; } .cal-mini{ display:none; } }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><a href="/" style="color:inherit;display:flex;gap:10px;align-items:center"><span class="logo">🌿</span> BARNBARN</a></div>
+    <a class="plain" href="/">◂ กลับหน้าแรก</a>
+  </nav>
+
+  <main class="wrap" style="max-width:820px">
+    <h1 style="color:var(--brown);text-align:center">ปฏิทินกิจกรรม</h1>
+    <p class="muted center">ดูภาพรวมกิจกรรมแต่ละเดือน · แตะวันที่มีกิจกรรมเพื่อดูรายละเอียดและสมัคร</p>
+
+    <div class="panel">
+      <div class="cal-head">
+        <button class="btn btn-ghost btn-sm" onclick="move(-1)">‹ เดือนก่อน</button>
+        <h2 id="cal-title" style="margin:0;color:var(--brown);font-size:20px">—</h2>
+        <button class="btn btn-ghost btn-sm" onclick="move(1)">เดือนถัดไป ›</button>
+      </div>
+      <div class="cal-grid" id="dow"></div>
+      <div class="cal-grid" id="cal" style="margin-top:6px"></div>
+    </div>
+
+    <div id="daylist"></div>
+    <p class="muted center mt"><a href="/">← กลับหน้าแรก ดูกิจกรรมทั้งหมด</a></p>
+  </main>
+
+  <div class="footer"><div class="fline">🌿 BARNBARN Workshop</div></div>
+
+  <script>
+    const TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const TH_DOW = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+    const money = (n) => Number(n).toLocaleString('th-TH');
+    const pad = (n) => String(n).padStart(2,'0');
+    const key = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
+    let EVENTS = {}; // 'YYYY-MM-DD' -> [{title,id,time,remaining,price}]
+    let view = new Date(); view.setDate(1);
+
+    async function boot() {
+      let items = [];
+      try { items = await (await fetch('/api/workshops')).json(); } catch { items = []; }
+      EVENTS = {};
+      let earliest = null;
+      items.forEach(w => (w.rounds||[]).forEach(r => {
+        if (!r.date) return;
+        (EVENTS[r.date] = EVENTS[r.date] || []).push({ title:w.title, id:w.id, time:r.time, remaining:r.remaining, price:r.price });
+        const d = new Date(r.date+'T00:00:00');
+        if (!earliest || d < earliest) earliest = d;
+      }));
+      // เริ่มที่เดือนของกิจกรรมที่ใกล้ที่สุดในอนาคต (หรือเดือนนี้)
+      const now = new Date(); now.setHours(0,0,0,0);
+      const upcoming = Object.keys(EVENTS).map(k=>new Date(k+'T00:00:00')).filter(d=>d>=now).sort((a,b)=>a-b)[0];
+      const start = upcoming || earliest || now;
+      view = new Date(start.getFullYear(), start.getMonth(), 1);
+      renderDOW(); render();
+    }
+
+    function renderDOW() {
+      document.getElementById('dow').innerHTML = TH_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+    }
+
+    function move(delta) { view = new Date(view.getFullYear(), view.getMonth()+delta, 1); render(); }
+
+    function render() {
+      const y = view.getFullYear(), m = view.getMonth();
+      document.getElementById('cal-title').textContent = `${TH_MONTHS[m]} ${y+543}`;
+      const first = new Date(y, m, 1).getDay();
+      const days = new Date(y, m+1, 0).getDate();
+      const today = new Date(); today.setHours(0,0,0,0);
+      let cells = '';
+      for (let i=0; i<first; i++) cells += `<div class="cal-cell empty"></div>`;
+      for (let d=1; d<=days; d++) {
+        const k = key(y,m,d);
+        const evs = EVENTS[k] || [];
+        const isToday = (new Date(y,m,d).getTime() === today.getTime());
+        const cls = 'cal-cell' + (evs.length?' has':'') + (isToday?' today':'');
+        const onclick = evs.length ? ` onclick="showDay('${k}')"` : '';
+        const mini = evs.slice(0,2).map(e=>`<div class="cal-mini">• ${e.title}</div>`).join('');
+        cells += `<div class="${cls}"${onclick}>
+          <div class="cal-daynum">${d}</div>
+          ${evs.length?`<div class="cal-dot">${evs.length} กิจกรรม</div>${mini}`:''}
+        </div>`;
+      }
+      document.getElementById('cal').innerHTML = cells;
+      // แสดงรายการทั้งเดือนไว้ด้านล่างโดยอัตโนมัติ
+      showMonthList(y, m);
+    }
+
+    function fmtFull(k) {
+      try { return new Date(k+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } catch { return k; }
+    }
+    function evRow(e) {
+      const seat = e.remaining>0 ? `<span class="muted">เหลือ ${e.remaining} ที่</span>` : `<span style="color:var(--danger)">เต็ม</span>`;
+      const price = e.price>0 ? money(e.price)+' บาท' : 'ฟรี';
+      return `<div class="rowline">
+        <span class="k">🎨 ${e.title}<br><span class="muted" style="font-size:13px">🕒 ${e.time||''} · ${price} · ${seat}</span></span>
+        <span class="v"><a class="btn btn-primary btn-sm" href="/workshop?id=${e.id}">ดู & สมัคร</a></span>
+      </div>`;
+    }
+    function showDay(k) {
+      const evs = EVENTS[k] || [];
+      document.getElementById('daylist').innerHTML = `<div class="panel"><h3 style="margin-top:0;color:var(--brown)">📅 ${fmtFull(k)}</h3>${evs.map(evRow).join('')}</div>`;
+      document.getElementById('daylist').scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+    function showMonthList(y, m) {
+      const keys = Object.keys(EVENTS).filter(k=>{ const d=new Date(k+'T00:00:00'); return d.getFullYear()===y && d.getMonth()===m; }).sort();
+      const box = document.getElementById('daylist');
+      if (!keys.length) { box.innerHTML = `<div class="panel center muted">เดือนนี้ยังไม่มีกิจกรรม · ลองดูเดือนถัดไป</div>`; return; }
+      box.innerHTML = `<div class="panel"><h3 style="margin-top:0;color:var(--brown)">กิจกรรมในเดือนนี้</h3>
+        ${keys.map(k=>`<div style="margin-bottom:6px"><b style="color:var(--brown)">${fmtFull(k)}</b>${(EVENTS[k]||[]).map(evRow).join('')}</div>`).join('')}</div>`;
+    }
+
+    boot();
+  </script>
+</body>
+</html>
