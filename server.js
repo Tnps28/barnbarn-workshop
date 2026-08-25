@@ -125,7 +125,20 @@ app.get('/api/workshops/:id', (req, res) => {
 });
 
 // ---------- public: register ----------
+// กันสแปม: จำกัดจำนวนครั้งสมัครต่อ IP ในช่วงเวลาหนึ่ง (in-memory)
+const _regHits = new Map();
+function registerRateLimited(ip) {
+  const now = Date.now(), WINDOW = 10 * 60 * 1000, MAX = 15;
+  const arr = (_regHits.get(ip) || []).filter((t) => now - t < WINDOW);
+  arr.push(now); _regHits.set(ip, arr);
+  return arr.length > MAX;
+}
+
 app.post('/api/register', (req, res) => {
+  const ip = String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+  if (registerRateLimited(ip)) {
+    return res.status(429).json({ error: 'มีการสมัครถี่เกินไปจากอุปกรณ์นี้ กรุณารอสักครู่แล้วลองใหม่ค่ะ' });
+  }
   const { workshopId, roundId, name, phone, email } = req.body || {};
   if (!workshopId || !roundId || !name || !phone) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อ เบอร์โทร และเลือกรอบให้ครบถ้วน' });
@@ -143,11 +156,24 @@ app.post('/api/register', (req, res) => {
   if (!String(req.body.emergencyName || '').trim() || !String(req.body.emergencyPhone || '').trim() || !String(req.body.emergencyRelation || '').trim()) {
     return res.status(400).json({ error: 'กรุณากรอกข้อมูลผู้ติดต่อฉุกเฉินให้ครบ (ชื่อ เบอร์ และความสัมพันธ์)' });
   }
+  // PDPA — ต้องยินยอมก่อนจึงจะสมัครได้
+  if (req.body.pdpaConsent !== true) {
+    return res.status(400).json({ error: 'กรุณายินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล (PDPA) ก่อนสมัคร' });
+  }
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
   if (!ws || !round) return res.status(404).json({ error: 'ไม่พบเวิร์กช็อปหรือรอบที่เลือก' });
 
   db.expireStale();
+  // กันสมัครซ้ำ: เบอร์เดิม + รอบเดิม ที่ยังไม่ถูกยกเลิก/หมดอายุ
+  const phoneDigits = String(phone).replace(/\D/g, '');
+  const dup = db.listRegistrations().find((r) =>
+    r.roundId === roundId &&
+    String(r.phone || '').replace(/\D/g, '') === phoneDigits &&
+    !['cancelled', 'expired'].includes(r.status));
+  if (dup) {
+    return res.status(409).json({ error: 'เบอร์นี้สมัครรอบนี้ไว้แล้วค่ะ — ดูสถานะได้ที่ "ดูการสมัครของฉัน" หรือทักผู้จัดทาง LINE หากต้องการแก้ไข' });
+  }
   const people = Number(req.body.people) || 1;
   // ผู้เข้าร่วมคนที่ 2..N ต้องมีชื่อครบตามจำนวน
   const members = (Array.isArray(req.body.members) ? req.body.members : []).slice(0, Math.max(0, people - 1));
@@ -182,6 +208,7 @@ app.post('/api/register', (req, res) => {
     emergencyName: req.body.emergencyName,
     emergencyPhone: req.body.emergencyPhone,
     emergencyRelation: req.body.emergencyRelation,
+    pdpaConsent: req.body.pdpaConsent === true,
     members,
     addons: selectedAddons.map((a) => ({ name: a.name, price: a.price })),
     note: req.body.note,

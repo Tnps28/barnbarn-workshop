@@ -376,6 +376,9 @@ export function createRegistration(payload) {
     emergencyName: payload.emergencyName || '',
     emergencyPhone: payload.emergencyPhone || '',
     emergencyRelation: payload.emergencyRelation || '',
+    // PDPA — บันทึกความยินยอมและเวลาที่ยินยอม
+    pdpaConsent: !!payload.pdpaConsent,
+    pdpaConsentAt: payload.pdpaConsent ? new Date().toISOString() : null,
     // ผู้เข้าร่วมคนที่ 2..N (ตัวแทน = คนที่ 1 อยู่ในฟิลด์หลัก) — [{name, nickname, age}]
     members: Array.isArray(payload.members) ? payload.members.map((m) => ({
       name: String(m.name || '').trim(),
