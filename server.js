@@ -118,6 +118,26 @@ app.get('/api/workshops', (req, res) => {
   res.json(db.listWorkshops({ onlyActive: true }).map(publicWorkshop));
 });
 
+// calendar feed: รวมกิจกรรมที่ผ่านไปแล้ว + ที่เปิดอยู่ (ซ่อน draft ที่ยังไม่เปิด = inactive+อนาคต)
+app.get('/api/calendar', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const out = [];
+  db.listWorkshops({}).forEach((ws) => {
+    (ws.rounds || []).forEach((r) => {
+      if (!r.date) return;
+      const isPast = r.date < today;
+      if (ws.active === false && !isPast) return; // ไม่โชว์ร่างที่ยังไม่เผยแพร่
+      out.push({
+        id: ws.id, title: ws.title, emoji: ws.emoji || '', category: ws.category || '', subtitle: ws.subtitle || '',
+        date: r.date, time: r.time, price: r.price,
+        remaining: Math.max(0, r.seats - db.seatsTaken(ws.id, r.id)),
+        active: ws.active !== false, past: isPast
+      });
+    });
+  });
+  res.json(out);
+});
+
 app.get('/api/workshops/:id', (req, res) => {
   const ws = db.getWorkshop(req.params.id);
   if (!ws || !ws.active) return res.status(404).json({ error: 'not found' });
