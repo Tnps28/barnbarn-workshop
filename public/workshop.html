@@ -247,6 +247,12 @@
           <select id="f-source">
             ${['','เว็บไซต์','LINE Official Account','Facebook','มีคนบอกต่อ','อื่นๆ'].map(v=>`<option value="${v}" ${v===d.source?'selected':''}>${v||'— เลือกช่องทาง —'}</option>`).join('')}
           </select>
+        </div>
+        <div class="field" style="background:#fbf1e2;border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+          <label style="font-weight:400;display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin:0">
+            <input type="checkbox" id="pdpa" ${FORM.pdpa?'checked':''} style="width:auto;margin-top:3px">
+            <span style="font-size:14px;line-height:1.5">ข้าพเจ้า<b>ยินยอม</b>ให้ผู้จัดเก็บ รวบรวม และใช้ข้อมูลส่วนบุคคลของผู้เข้าร่วมทั้งหมด (รวมถึงข้อมูลสุขภาพและผู้ติดต่อฉุกเฉินที่จะกรอกในขั้นถัดไป) เพื่อการลงทะเบียนและติดต่อเกี่ยวกับกิจกรรมนี้ ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA) <span class="req">*</span><br><a href="/privacy.html" target="_blank" rel="noopener" style="font-size:12px">อ่านนโยบายความเป็นส่วนตัว ↗</a></span>
+          </label>
         </div>`;
     }
 
@@ -295,13 +301,7 @@
           <div class="field" style="flex:1"><label>เบอร์ติดต่อฉุกเฉิน <span class="req">*</span></label><input id="e-phone" inputmode="tel" value="${escAttr(e.phone)}" placeholder="08x-xxx-xxxx"></div>
           <div class="field" style="flex:1"><label>ความสัมพันธ์ <span class="req">*</span></label><input id="e-rel" value="${escAttr(e.relation)}" placeholder="เช่น พ่อ แม่ พี่ เพื่อน"></div>
         </div>
-        <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="f-note" placeholder="คำถามอื่น ๆ">${escAttr(FORM.note)}</textarea></div>
-        <div class="field" style="background:#fbf1e2;border:1px solid var(--line);border-radius:10px;padding:12px 14px">
-          <label style="font-weight:400;display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin:0">
-            <input type="checkbox" id="pdpa" ${FORM.pdpa?'checked':''} style="width:auto;margin-top:3px">
-            <span style="font-size:14px;line-height:1.5">ข้าพเจ้า<b>ยินยอม</b>ให้ผู้จัดเก็บ รวบรวม และใช้ข้อมูลส่วนบุคคลข้างต้น (รวมถึงข้อมูลสุขภาพ) เพื่อการลงทะเบียนและติดต่อเกี่ยวกับกิจกรรมนี้ ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA) <span class="req">*</span><br><a href="/privacy.html" target="_blank" rel="noopener" style="font-size:12px">อ่านนโยบายความเป็นส่วนตัว ↗</a></span>
-          </label>
-        </div>`;
+        <div class="field"><label>หมายเหตุถึงผู้จัด</label><textarea id="f-note" placeholder="คำถามอื่น ๆ">${escAttr(FORM.note)}</textarea></div>`;
     }
 
     function renderInfo(step) {
@@ -345,6 +345,7 @@
         if (step === 0) {
           FORM.rep = { name: val('f-name'), nickname: val('f-nick'), age: val('f-age'), phone: val('f-phone'),
                        province: val('province'), email: val('f-email'), lineId: val('f-line'), source: val('f-source') };
+          FORM.pdpa = !!document.getElementById('pdpa')?.checked;
         } else {
           FORM.members[step-1] = { name: val('m-name'), nickname: val('m-nick'), age: val('m-age') };
         }
@@ -358,7 +359,6 @@
         rec('allergy-has','allergy','h-allergy'); rec('food-has','foodAvoid','h-food'); rec('medical-has','medical','h-medical');
         FORM.emergency = { name: val('e-name'), phone: val('e-phone'), relation: val('e-rel') };
         FORM.note = val('f-note');
-        FORM.pdpa = !!document.getElementById('pdpa')?.checked;
       }
     }
 
@@ -372,6 +372,7 @@
         if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) return 'รูปแบบอีเมลไม่ถูกต้อง';
         if (!d.email && !d.lineId) return 'กรุณากรอกอีเมล หรือ ชื่อ LINE อย่างน้อย 1 อย่าง';
         if (!d.source) return 'กรุณาเลือกช่องทางที่รู้จักกิจกรรมนี้';
+        if (!document.getElementById('pdpa')?.checked) return 'กรุณาติ๊กยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล (PDPA) ก่อนไปต่อ';
       } else if (step < PEOPLE) {
         const m = FORM.members[step-1];
         if (!m.name) return `กรุณากรอกชื่อผู้เข้าร่วมคนที่ ${step+1}`;
@@ -386,7 +387,6 @@
         if (pick('medical-has') === 'yes' && !val('h-medical')) return 'กรุณาระบุโรคประจำตัว หรือเลือก “ไม่มี”';
         const e = FORM.emergency;
         if (!e.name || e.phone.replace(/\D/g,'').length < 8 || !e.relation) return 'กรุณากรอกข้อมูลผู้ติดต่อฉุกเฉินให้ครบ (ชื่อ เบอร์ ความสัมพันธ์)';
-        if (!document.getElementById('pdpa')?.checked) return 'กรุณาติ๊กยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล (PDPA) ก่อนสมัคร';
       }
       return '';
     }

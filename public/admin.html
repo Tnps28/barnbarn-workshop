@@ -236,7 +236,7 @@
       if (FILTER_WS) {
         const rs = REGS.filter(r => r.workshopId === FILTER_WS);
         s = {
-          totalRegistrations: rs.filter(r => r.status !== 'expired').length,
+          totalRegistrations: rs.filter(r => r.status !== 'expired').reduce((a, r) => a + (Number(r.people) || 1), 0),
           pendingPayment: rs.filter(r => r.status === 'pending_payment').length,
           awaitingVerification: rs.filter(r => r.status === 'awaiting_verification').length,
           paid: rs.filter(r => r.status === 'paid').length,
@@ -248,7 +248,7 @@
       }
       const aw = s.awaitingVerification || 0;
       document.getElementById('stats').innerHTML = `
-        ${stat(s.totalRegistrations || 0,'ผู้สมัครทั้งหมด')}
+        ${stat(s.totalRegistrations || 0,'ผู้เข้าร่วมทั้งหมด')}
         ${stat(s.pendingPayment || 0,'รอชำระเงิน')}
         ${stat(aw,'แจ้งโอน รอตรวจสอบ', aw>0)}
         ${stat(s.paid || 0,'ชำระแล้ว รอยืนยัน')}
