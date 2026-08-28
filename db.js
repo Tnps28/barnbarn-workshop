@@ -304,6 +304,7 @@ export function createWorkshop(payload) {
     location: payload.location || '',
     image: payload.image || '',
     imagePos: payload.imagePos || 'center',
+    multiDay: !!payload.multiDay, // true = ให้ผู้สมัครติ๊กเลือกได้หลายวัน (รวมราคา)
     rounds: normalizeRounds(payload.rounds),
     addons: normalizeAddons(payload.addons),
     active: payload.active !== false,
@@ -325,6 +326,7 @@ export function updateWorkshop(id, payload) {
     location: payload.location ?? ws.location,
     image: payload.image ?? ws.image,
     imagePos: payload.imagePos ?? ws.imagePos,
+    multiDay: payload.multiDay ?? ws.multiDay,
     active: payload.active ?? ws.active
   });
   if (Array.isArray(payload.rounds)) ws.rounds = normalizeRounds(payload.rounds);
@@ -343,7 +345,11 @@ export function deleteWorkshop(id) {
 export function seatsTaken(workshopId, roundId) {
   const db = read();
   return db.registrations
-    .filter((r) => r.workshopId === workshopId && r.roundId === roundId && r.status !== 'cancelled')
+    .filter((r) => {
+      if (r.workshopId !== workshopId || r.status === 'cancelled') return false;
+      const rids = (r.roundIds && r.roundIds.length) ? r.roundIds : [r.roundId];
+      return rids.includes(roundId); // ใบสมัครหลายวันนับที่นั่งของทุกวันที่เลือก
+    })
     .reduce((sum, r) => sum + (Number(r.people) || 1), 0);
 }
 export function listRegistrations(filter = {}) {
@@ -357,10 +363,12 @@ export function getRegistration(id) {
 }
 export function createRegistration(payload) {
   const db = read();
+  const _rids = (Array.isArray(payload.roundIds) && payload.roundIds.length) ? payload.roundIds : [payload.roundId];
   const reg = {
     id: uid('reg'),
     workshopId: payload.workshopId,
-    roundId: payload.roundId,
+    roundId: _rids[0],        // รอบหลัก (ใช้ร่วมกับโค้ดเดิม)
+    roundIds: _rids,          // ทุกวันที่เลือก (โหมดหลายวัน)
     name: payload.name,
     phone: payload.phone,
     email: payload.email || '',

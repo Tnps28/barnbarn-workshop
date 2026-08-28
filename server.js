@@ -96,11 +96,14 @@ function toPublicRegs(matched) {
   return matched.map((r) => {
     const ws = db.getWorkshop(r.workshopId);
     const round = ws && ws.rounds.find((x) => x.id === r.roundId);
+    const rids = (r.roundIds && r.roundIds.length) ? r.roundIds : [r.roundId];
+    const rounds = ws ? rids.map((id) => ws.rounds.find((x) => x.id === id)).filter(Boolean).map((x) => ({ date: x.date, time: x.time })) : [];
     return {
       id: r.id, name: r.name,
       workshopTitle: ws ? ws.title : '(เวิร์กช็อปถูกลบแล้ว)',
       location: ws ? ws.location : '',
       round: round ? { date: round.date, time: round.time } : null,
+      rounds,
       people: r.people, addons: r.addons || [], amount: r.amount,
       status: r.status, createdAt: r.createdAt
     };
@@ -183,26 +186,35 @@ app.post('/api/register', (req, res) => {
   const ws = db.getWorkshop(workshopId);
   const round = roundOf(ws, roundId);
   if (!ws || !round) return res.status(404).json({ error: 'ไม่พบเวิร์กช็อปหรือรอบที่เลือก' });
+  // โหมดหลายวัน: อาจเลือกได้หลายรอบ (roundIds) — ตรวจทุกวันที่เลือก
+  const selRoundIds = (Array.isArray(req.body.roundIds) && req.body.roundIds.length) ? [...new Set(req.body.roundIds)] : [roundId];
+  const selRounds = selRoundIds.map((rid) => roundOf(ws, rid));
+  if (selRounds.some((r) => !r)) return res.status(404).json({ error: 'ไม่พบรอบที่เลือกบางรอบ' });
 
   db.expireStale();
-  // กันสมัครซ้ำ: เบอร์เดิม + รอบเดิม ที่ยังไม่ถูกยกเลิก/หมดอายุ
-  const phoneDigits = String(phone).replace(/\D/g, '');
-  const dup = db.listRegistrations().find((r) =>
-    r.roundId === roundId &&
-    String(r.phone || '').replace(/\D/g, '') === phoneDigits &&
-    !['cancelled', 'expired'].includes(r.status));
-  if (dup) {
-    return res.status(409).json({ error: 'เบอร์นี้สมัครรอบนี้ไว้แล้วค่ะ — ดูสถานะได้ที่ "ดูการสมัครของฉัน" หรือทักผู้จัดทาง LINE หากต้องการแก้ไข' });
-  }
   const people = Number(req.body.people) || 1;
   // ผู้เข้าร่วมคนที่ 2..N ต้องมีชื่อครบตามจำนวน
   const members = (Array.isArray(req.body.members) ? req.body.members : []).slice(0, Math.max(0, people - 1));
   if (members.length < people - 1 || members.some((m) => !String(m && m.name || '').trim())) {
     return res.status(400).json({ error: `กรุณากรอกชื่อผู้เข้าร่วมให้ครบทั้ง ${people} ท่าน` });
   }
-  const remaining = round.seats - db.seatsTaken(workshopId, roundId);
-  if (people > remaining) {
-    return res.status(400).json({ error: `ที่นั่งเหลือ ${remaining} ที่ ไม่พอสำหรับ ${people} ท่าน` });
+  // กันสมัครซ้ำ: เบอร์เดิม + วันที่ทับกับที่เลือก ที่ยังไม่ถูกยกเลิก/หมดอายุ
+  const phoneDigits = String(phone).replace(/\D/g, '');
+  const dup = db.listRegistrations().find((r) => {
+    if (r.workshopId !== workshopId || ['cancelled', 'expired'].includes(r.status)) return false;
+    if (String(r.phone || '').replace(/\D/g, '') !== phoneDigits) return false;
+    const rids = (r.roundIds && r.roundIds.length) ? r.roundIds : [r.roundId];
+    return rids.some((id) => selRoundIds.includes(id));
+  });
+  if (dup) {
+    return res.status(409).json({ error: 'เบอร์นี้สมัครรอบนี้ไว้แล้วค่ะ — ดูสถานะได้ที่ "ดูการสมัครของฉัน" หรือทักผู้จัดทาง LINE หากต้องการแก้ไข' });
+  }
+  // ตรวจที่นั่งให้พอทุกวันที่เลือก
+  for (const r of selRounds) {
+    const rem = r.seats - db.seatsTaken(workshopId, r.id);
+    if (people > rem) {
+      return res.status(400).json({ error: `รอบ ${r.date} ${r.time} เหลือ ${rem} ที่ ไม่พอสำหรับ ${people} ท่าน` });
+    }
   }
 
   // validate selected add-ons against the workshop's defined add-ons (prevent tampering)
@@ -213,6 +225,7 @@ app.post('/api/register', (req, res) => {
   const reg = db.createRegistration({
     workshopId,
     roundId,
+    roundIds: selRoundIds,
     name,
     phone,
     email: req.body.email,
@@ -232,7 +245,7 @@ app.post('/api/register', (req, res) => {
     members,
     addons: selectedAddons.map((a) => ({ name: a.name, price: a.price })),
     note: req.body.note,
-    amount: round.price * people + addonsTotal
+    amount: selRounds.reduce((s, r) => s + (Number(r.price) || 0), 0) * people + addonsTotal
   });
 
   // Free workshop (amount 0): no payment step — auto‑confirm the seat and email the participant.
@@ -350,7 +363,9 @@ app.get('/api/admin/registrations', requireAdmin, (req, res) => {
   const enriched = regs.map((r) => {
     const ws = db.getWorkshop(r.workshopId);
     const round = roundOf(ws, r.roundId);
-    return { ...r, workshopTitle: ws ? ws.title : '(ลบแล้ว)', round };
+    const rids = (r.roundIds && r.roundIds.length) ? r.roundIds : [r.roundId];
+    const rounds = ws ? rids.map((id) => roundOf(ws, id)).filter(Boolean) : [];
+    return { ...r, workshopTitle: ws ? ws.title : '(ลบแล้ว)', round, rounds };
   });
   res.json(enriched);
 });
