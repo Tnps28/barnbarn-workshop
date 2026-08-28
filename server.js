@@ -418,22 +418,45 @@ app.post('/api/admin/registrations/:id/confirm', requireAdmin, async (req, res) 
   res.json({ sent: result.sent, demo: result.demo, message, error: result.error });
 });
 
-// admin toggles attendance (check-in on event day)
+// helper: normalize attendedDays from a registration (backward compatible)
+function attendedDaysOf(reg) {
+  if (Array.isArray(reg.attendedDays)) return [...reg.attendedDays];
+  return reg.attended ? [reg.roundId] : [];
+}
+
+// admin toggles attendance for a specific day (roundId). No roundId = toggle whole reg.
 app.post('/api/admin/registrations/:id/attend', requireAdmin, (req, res) => {
   const reg = db.getRegistration(req.params.id);
   if (!reg) return res.status(404).json({ error: 'not found' });
-  const updated = db.updateRegistration(reg.id, { attended: !reg.attended });
+  const rid = req.body && req.body.roundId;
+  let days = attendedDaysOf(reg);
+  if (rid) {
+    days = days.includes(rid) ? days.filter((d) => d !== rid) : [...days, rid];
+  } else {
+    const all = (reg.roundIds && reg.roundIds.length) ? reg.roundIds : [reg.roundId];
+    days = days.length ? [] : all;
+  }
+  const updated = db.updateRegistration(reg.id, { attendedDays: days, attended: days.length > 0 });
   res.json(updated);
 });
 
-// scan-to-check-in: set attended = true (idempotent). Used by the QR scanner.
+// scan-to-check-in: mark the day matching TODAY (or the only day). Used by the QR scanner.
 app.post('/api/admin/registrations/:id/checkin', requireAdmin, (req, res) => {
   const reg = db.getRegistration(String(req.params.id || '').trim());
   if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัครนี้' });
-  const already = !!reg.attended;
-  const updated = db.updateRegistration(reg.id, { attended: true });
-  const ws = db.getWorkshop(updated.workshopId);
-  res.json({ ok: true, already, name: updated.name, status: updated.status, workshopTitle: ws ? ws.title : '' });
+  const ws = db.getWorkshop(reg.workshopId);
+  const rids = (reg.roundIds && reg.roundIds.length) ? reg.roundIds : [reg.roundId];
+  const rounds = rids.map((id) => roundOf(ws, id)).filter(Boolean);
+  const today = new Date().toISOString().slice(0, 10);
+  const target = rounds.find((r) => r.date === today) || (rounds.length === 1 ? rounds[0] : null);
+  if (!target) {
+    return res.status(409).json({ error: 'วันนี้ไม่ตรงกับวันของกิจกรรมนี้ — กรุณาเช็คอินรายวันจากปุ่มในตาราง', name: reg.name });
+  }
+  let days = attendedDaysOf(reg);
+  const already = days.includes(target.id);
+  if (!already) days.push(target.id);
+  const updated = db.updateRegistration(reg.id, { attendedDays: days, attended: days.length > 0 });
+  res.json({ ok: true, already, name: updated.name, dayLabel: `${target.date} ${target.time}`, workshopTitle: ws ? ws.title : '' });
 });
 
 // admin edits a registration (name/phone/people/round/allergy/medical/note); recomputes amount

@@ -406,6 +406,7 @@ export function createRegistration(payload) {
     confirmed: false,
     confirmationMessage: '',
     attended: false,
+    attendedDays: [], // roundId ที่เช็คอินแล้ว (เช็คอินแยกรายวันสำหรับกิจกรรมหลายวัน)
     createdAt: new Date().toISOString()
   };
   db.registrations.push(reg);
