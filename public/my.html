@@ -79,7 +79,7 @@
               <h3 style="margin:0">${r.workshopTitle}</h3>
               ${statusPill(r.status)}
             </div>
-            ${r.round ? `<div class="muted">📅 ${fmtDate(r.round.date)} · ${r.round.time}</div>` : ''}
+            ${(r.rounds && r.rounds.length>1) ? `<div class="muted">📅 ${r.rounds.map(x=>fmtDate(x.date)+' · '+x.time).join('<br>📅 ')} <b>(${r.rounds.length} วัน)</b></div>` : (r.round ? `<div class="muted">📅 ${fmtDate(r.round.date)} · ${r.round.time}</div>` : '')}
             ${r.location ? `<div class="muted">📍 ${r.location}</div>` : ''}
             <div class="muted">👥 ${r.people} ท่าน${r.addons&&r.addons.length?` · ➕ ${r.addons.map(a=>a.name).join(', ')}`:''}</div>
             <div class="price">${r.amount>0 ? money(r.amount)+' บาท' : 'ฟรี'}</div>

@@ -101,6 +101,7 @@
       <div id="addons-wrap"></div>
       <button class="btn btn-ghost btn-sm mt" onclick="addAddonRow()">➕ เพิ่มอุปกรณ์พิเศษ</button>
 
+      <div class="field mt"><label><input type="checkbox" id="f-multiday" style="width:auto"> ให้เลือกได้หลายวัน (กิจกรรมหลายวัน — ผู้สมัครติ๊กเลือก 1 วันหรือหลายวัน ราคารวมตามจำนวนวัน)</label></div>
       <div class="field mt"><label><input type="checkbox" id="f-active" checked style="width:auto"> เปิดรับสมัคร (แสดงบนหน้าเว็บ)</label></div>
 
       <div style="display:flex;gap:10px;margin-top:8px">
@@ -358,7 +359,7 @@
       document.getElementById('reg-body').innerHTML = list.map(r => `
         <tr>
           <td><b>${r.name}</b>${r.nickname?` <span class="muted">(${r.nickname})</span>`:''}${r.age?` <span class="muted" style="font-size:12px">· ${r.age} ปี</span>`:''}<br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${(r.members&&r.members.length)?`<br><span style="font-size:12px;color:var(--brown)">👥 ผู้ร่วม: ${r.members.map(m=>m.name+(m.nickname?' ('+m.nickname+')':'')+(m.age?' '+m.age+'ปี':'')).join(', ')}</span>`:''}${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.foodAvoid?`<br><span style="color:var(--danger);font-size:12px">🚫 ไม่ทาน: ${r.foodAvoid}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.emergencyPhone?`<br><span style="font-size:12px;color:var(--brown)">🆘 ฉุกเฉิน: ${r.emergencyName||''} (${r.emergencyRelation||'-'}) ${r.emergencyPhone}</span>`:''}${r.pdpaConsent?`<br><span style="font-size:12px;color:var(--green)">✓ ยินยอม PDPA</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}${r.adminNote?`<br><span style="font-size:12px;color:var(--brown);background:#fff3d6;padding:1px 7px;border-radius:6px;display:inline-block;margin-top:3px">📌 โน้ตแอดมิน: ${r.adminNote}</span>`:''}${r.source?`<br><span class="muted" style="font-size:12px">📣 รู้จักจาก: ${r.source}</span>`:''}</td>
-          <td>${r.workshopTitle}<br><span class="muted">${r.round?fmtDate(r.round.date)+' '+r.round.time:''} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}<br><span class="muted" style="font-size:12px">🕒 สมัคร: ${fmtDT(r.createdAt)}${payLeft(r)}</span></td>
+          <td>${r.workshopTitle}<br><span class="muted">${(r.rounds&&r.rounds.length>1)?r.rounds.map(x=>fmtDate(x.date)).join(', ')+' ('+r.rounds.length+' วัน)':(r.round?fmtDate(r.round.date)+' '+r.round.time:'')} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}<br><span class="muted" style="font-size:12px">🕒 สมัคร: ${fmtDT(r.createdAt)}${payLeft(r)}</span></td>
           <td>${r.amount>0 ? money(r.amount)+' ฿' : 'ฟรี'}</td>
           <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
           <td>
@@ -487,7 +488,7 @@
         r.name, r.nickname||'', r.age||'', r.phone, r.province||'', r.lineId||'', r.email||'',
         (r.members||[]).map(m=>m.name+(m.nickname?' ('+m.nickname+')':'')+(m.age?' '+m.age+'ปี':'')).join(' | '),
         r.workshopTitle,
-        r.round ? (fmtDate(r.round.date)+' '+r.round.time) : '',
+        (r.rounds&&r.rounds.length) ? r.rounds.map(x=>fmtDate(x.date)+' '+x.time).join(' | ') : (r.round ? (fmtDate(r.round.date)+' '+r.round.time) : ''),
         r.people,
         (r.addons||[]).map(a=>a.name+' (+'+a.price+')').join(' | '),
         r.allergy||'', r.foodAvoid||'', r.medical||'',
@@ -653,6 +654,7 @@
       document.getElementById('f-location').value = w?.location || '';
       WS_IMG = w?.image || ''; WS_IMG_POS = w?.imagePos || 'center'; showWsImagePreview();
       document.getElementById('f-active').checked = w ? w.active : true;
+      document.getElementById('f-multiday').checked = w ? !!w.multiDay : false;
       document.getElementById('rounds-wrap').innerHTML = '';
       (w?.rounds?.length ? w.rounds : [{}]).forEach(addRoundRow);
       document.getElementById('addons-wrap').innerHTML = '';
@@ -701,7 +703,9 @@
       const payload = {
         title: v('f-title'), subtitle: v('f-subtitle'), category: v('f-category'),
         description: v('f-desc'), location: v('f-location'), image: WS_IMG, imagePos: WS_IMG_POS,
-        active: document.getElementById('f-active').checked, rounds: collectRounds(), addons: collectAddons()
+        active: document.getElementById('f-active').checked,
+        multiDay: document.getElementById('f-multiday').checked,
+        rounds: collectRounds(), addons: collectAddons()
       };
       if (!payload.title) return alert('กรุณาใส่ชื่อเวิร์กช็อป');
       const url = id ? '/api/admin/workshops/'+id : '/api/admin/workshops';

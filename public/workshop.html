@@ -92,11 +92,15 @@
 
     // ---------- STEP 1: เลือกรอบ ----------
     function renderStep1() {
+      const multi = !!WS.multiDay;
       const rounds = WS.rounds.map(r => {
         const full = r.remaining <= 0;
+        const input = multi
+          ? `<input type="checkbox" name="day" value="${r.id}" data-price="${r.price}" ${full?'disabled':''} onchange="updateDayTotal()" style="width:auto">`
+          : `<input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto">`;
         return `<div class="rowline" style="opacity:${full?.75:1}">
           <label class="k" style="cursor:${full?'not-allowed':'pointer'};display:flex;align-items:center;gap:8px">
-            <input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto">
+            ${input}
             📅 ${fmtDate(r.date)} · ${r.time}</label>
           <span class="v">${r.price>0 ? money(r.price)+' บาท' : 'ฟรี'} ${full
             ? `<span style="color:var(--danger)">· เต็ม</span> <button class="btn btn-ghost btn-sm" onclick="openWaitlist('${r.id}')">🔔 เข้าคิวสำรอง</button>`
@@ -117,8 +121,10 @@
             ${WS.subtitle?`<p class="muted" style="margin-top:-6px">${WS.subtitle}</p>`:''}
             <p>${(WS.description||'').replace(/\n/g,'<br>')}</p>
             ${WS.location?`<p>📍 <b>สถานที่:</b> ${WS.location}</p>`:''}
-            <h3 style="color:var(--brown)">เลือกวันและรอบ</h3>
+            <h3 style="color:var(--brown)">${multi ? 'เลือกวัน (วันเดียว หรือทั้ง 2 วันก็ได้)' : 'เลือกวันและรอบ'}</h3>
+            ${multi ? '<p class="hint" style="margin-top:-4px">ติ๊กวันที่ต้องการเข้าร่วม — ราคารวมตามจำนวนวันที่เลือก</p>' : ''}
             ${rounds}
+            ${multi ? '<div id="day-total" class="rowline" style="border-top:1px dashed var(--line);margin-top:6px;padding-top:8px"><span class="k total">รวม (ต่อท่าน)</span><span class="v total">฿0</span></div>' : ''}
             <div id="waitlist-area"></div>
             <div class="field mt">
               <label>จำนวนผู้เข้าร่วม</label>
@@ -149,13 +155,29 @@
         </div>`;
     }
 
-    let FORM = null, ROUNDID = null, PEOPLE = 1, INFO_STEP = 0, PDPA_CONSENT = false;
+    let FORM = null, ROUNDID = null, PEOPLE = 1, INFO_STEP = 0, PDPA_CONSENT = false, SELECTED_ROUNDS = [];
+    function roundsPriceSum() {
+      return SELECTED_ROUNDS.reduce((s, id) => { const r = WS.rounds.find(x => x.id === id); return s + (r ? (Number(r.price) || 0) : 0); }, 0);
+    }
+    function updateDayTotal() {
+      const el = document.getElementById('day-total'); if (!el) return;
+      const sum = [...document.querySelectorAll('input[name=day]:checked')].reduce((s, c) => s + (Number(c.dataset.price) || 0), 0);
+      el.querySelector('.v').textContent = sum > 0 ? '฿' + money(sum) : 'ฟรี';
+    }
     function toStep2() {
-      const round = document.querySelector('input[name=round]:checked');
-      if (!round) return alert('กรุณาเลือกวันและรอบก่อนค่ะ');
+      let sel;
+      if (WS.multiDay) {
+        sel = [...document.querySelectorAll('input[name=day]:checked')].map(c => c.value);
+        if (!sel.length) return alert('กรุณาเลือกอย่างน้อย 1 วันค่ะ');
+      } else {
+        const round = document.querySelector('input[name=round]:checked');
+        if (!round) return alert('กรุณาเลือกวันและรอบก่อนค่ะ');
+        sel = [round.value];
+      }
       PDPA_CONSENT = !!document.getElementById('pdpa1')?.checked;
       if (!PDPA_CONSENT) return alert('กรุณาติ๊กยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล (PDPA) ก่อนค่ะ');
-      ROUNDID = round.value;
+      SELECTED_ROUNDS = sel;
+      ROUNDID = sel[0];
       PEOPLE = Number(document.getElementById('people').value);
       const ids = [...document.querySelectorAll('input[name=addon]:checked')].map(c => c.value);
       SELECTED_ADDONS = (WS.addons || []).filter(a => ids.includes(a.id));
@@ -224,11 +246,14 @@
     // ---------- STEP 2: กรอกข้อมูล (หลายหน้าตามจำนวนผู้เข้าร่วม) ----------
     const escAttr = (s) => String(s || '').replace(/"/g, '&quot;');
 
-    function summaryAside(r, total) {
+    function summaryAside(total) {
+      const days = SELECTED_ROUNDS.map(id => WS.rounds.find(x => x.id === id)).filter(Boolean);
+      const dayLines = days.map(r => `${fmtDate(r.date)} · ${r.time}`).join('<br>');
+      const perPerson = roundsPriceSum();
       return `<h3 style="margin-top:0;color:var(--brown)">สรุปการสมัคร</h3>
         <div class="rowline"><span class="k">เวิร์กช็อป</span><span class="v">${WS.title}</span></div>
-        <div class="rowline"><span class="k">รอบ</span><span class="v">${fmtDate(r.date)}<br>${r.time}</span></div>
-        <div class="rowline"><span class="k">ราคา/ท่าน</span><span class="v">${r.price>0 ? money(r.price)+' บาท' : 'ฟรี'}</span></div>
+        <div class="rowline"><span class="k">${days.length>1 ? 'วันที่เลือก ('+days.length+' วัน)' : 'รอบ'}</span><span class="v">${dayLines}</span></div>
+        <div class="rowline"><span class="k">ราคา/ท่าน</span><span class="v">${perPerson>0 ? money(perPerson)+' บาท' : 'ฟรี'}</span></div>
         <div class="rowline"><span class="k">จำนวน</span><span class="v">${PEOPLE} ท่าน</span></div>
         ${SELECTED_ADDONS.map(a=>`<div class="rowline"><span class="k">➕ ${a.name}</span><span class="v">+${money(a.price)} บาท</span></div>`).join('')}
         <div class="rowline"><span class="k total">ยอดรวม</span><span class="v total">${total>0 ? money(total)+' บาท' : 'ฟรี'}</span></div>`;
@@ -308,8 +333,7 @@
 
     function renderInfo(step) {
       INFO_STEP = step;
-      const r = WS.rounds.find(x => x.id === ROUNDID);
-      const total = r.price * PEOPLE + addonsTotal();
+      const total = roundsPriceSum() * PEOPLE + addonsTotal();
       const isLast = step === PEOPLE;
       let heading, progress, body;
       if (step < PEOPLE) {
@@ -337,7 +361,7 @@
               <button class="btn btn-primary" style="flex:1" onclick="infoNext()">${nextLabel}</button>
             </div>
           </div>
-          <aside class="panel">${summaryAside(r, total)}</aside>
+          <aside class="panel">${summaryAside(total)}</aside>
         </div>`;
       window.scrollTo(0, 0);
     }
@@ -407,7 +431,7 @@
     async function submitReg() {
       const d = FORM.rep;
       const body = {
-        workshopId: wsId, roundId: ROUNDID, people: PEOPLE,
+        workshopId: wsId, roundId: ROUNDID, roundIds: SELECTED_ROUNDS, people: PEOPLE,
         name: d.name, phone: d.phone, email: d.email, lineId: d.lineId,
         province: d.province, source: d.source, nickname: d.nickname, age: d.age,
         allergy: FORM.health.allergy, foodAvoid: FORM.health.foodAvoid, medical: FORM.health.medical,
