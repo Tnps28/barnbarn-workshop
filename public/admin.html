@@ -366,7 +366,7 @@
             <div class="reg-actions">
             ${(r.status==='pending_payment'||r.status==='awaiting_verification')?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ยืนยันรับเงินแล้ว</button>`:''}
             ${r.status==='paid'?`<button class="btn btn-blue btn-sm" onclick="confirmReg('${r.id}')">ส่งยืนยัน LINE</button>`:''}
-            ${r.status==='confirmed'?`<button class="btn ${r.attended?'btn-ghost':'btn-blue'} btn-sm" onclick="attendReg('${r.id}')">${r.attended?'✅ เช็คอินแล้ว':'📍 เช็คอิน'}</button>`:''}
+            ${r.status==='confirmed'?checkinButtons(r):''}
             <button class="btn btn-ghost btn-sm" onclick="editAdminNote('${r.id}')">📌 โน้ต</button>
             ${(r.status!=='cancelled'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="openEditReg('${r.id}')">✏️ แก้ไข</button>`:''}
             ${(r.status!=='cancelled'&&r.status!=='confirmed'&&r.status!=='expired')?`<button class="btn btn-ghost btn-sm" onclick="cancelReg('${r.id}')" style="color:var(--danger)">ยกเลิก</button>`:''}
@@ -413,7 +413,20 @@
     }
 
     // ----- check-in -----
-    async function attendReg(id){ await fetch(`/api/admin/registrations/${id}/attend`,{method:'POST',headers:H()}); loadAll(); }
+    // ปุ่มเช็คอิน: กิจกรรมหลายวันจะมีปุ่มแยกแต่ละวัน (1 รายการ แต่เช็คอินได้ทีละวัน)
+    function checkinButtons(r){
+      const att = (r.attendedDays && r.attendedDays.length) ? r.attendedDays : ((r.attended && r.roundId) ? [r.roundId] : []);
+      const days = (r.rounds && r.rounds.length) ? r.rounds : (r.round ? [r.round] : []);
+      if (days.length <= 1){
+        const rid = (days[0] && days[0].id) || r.roundId;
+        const on = att.includes(rid);
+        return `<button class="btn ${on?'btn-ghost':'btn-blue'} btn-sm" onclick="attendReg('${r.id}','${rid}')">${on?'✅ เช็คอินแล้ว':'📍 เช็คอิน'}</button>`;
+      }
+      return days.map(d=>{ const on=att.includes(d.id);
+        return `<button class="btn ${on?'btn-ghost':'btn-blue'} btn-sm" style="margin:1px 0" onclick="attendReg('${r.id}','${d.id}')">${on?'✅':'📍'} ${fmtDate(d.date)}</button>`;
+      }).join(' ');
+    }
+    async function attendReg(id, roundId){ await fetch(`/api/admin/registrations/${id}/attend`,{method:'POST',headers:H(),body:JSON.stringify({roundId})}); loadAll(); }
 
     // ----- admin-only note (quick add/edit) -----
     async function editAdminNote(id){
@@ -750,11 +763,12 @@
       const rs = document.getElementById('scan-result');
       try {
         const res = await fetch('/api/admin/registrations/' + encodeURIComponent(id) + '/checkin', { method:'POST', headers: H() });
-        if (!res.ok) { rs.innerHTML = '<div class="alert err">❌ ไม่พบรหัสนี้: ' + id + '</div>'; return; }
-        const d = await res.json();
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) { rs.innerHTML = '<div class="alert err">⚠️ ' + (d.error || ('ไม่พบรหัสนี้: ' + id)) + (d.name?'<br><span class="muted">'+d.name+'</span>':'') + '</div>'; return; }
+        const dayTxt = d.dayLabel ? '<br><span class="muted">🗓️ วัน: ' + d.dayLabel + '</span>' : '';
         rs.innerHTML = d.already
-          ? '<div class="alert" style="background:#fff7e6;border:1px solid #ffd591;color:#8a5a00;padding:10px;border-radius:10px">ℹ️ <b>' + d.name + '</b> เช็คอินไปแล้วก่อนหน้านี้<br><span class="muted">' + (d.workshopTitle||'') + '</span></div>'
-          : '<div class="alert" style="background:#eafbea;border:1px solid #b7e4b7;color:#256d25;padding:10px;border-radius:10px">✅ เช็คอินสำเร็จ: <b>' + d.name + '</b><br><span class="muted">' + (d.workshopTitle||'') + '</span></div>';
+          ? '<div class="alert" style="background:#fff7e6;border:1px solid #ffd591;color:#8a5a00;padding:10px;border-radius:10px">ℹ️ <b>' + d.name + '</b> เช็คอินวันนี้ไปแล้ว' + dayTxt + '</div>'
+          : '<div class="alert" style="background:#eafbea;border:1px solid #b7e4b7;color:#256d25;padding:10px;border-radius:10px">✅ เช็คอินสำเร็จ: <b>' + d.name + '</b>' + dayTxt + '</div>';
       } catch (e) {
         rs.innerHTML = '<div class="alert err">เกิดข้อผิดพลาด: ' + (e && e.message ? e.message : e) + '</div>';
       }
