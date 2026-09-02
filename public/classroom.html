@@ -6,6 +6,29 @@
   <title>ห้องเรียน — BARNBARN</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    .cls-list{display:flex;flex-direction:column;gap:4px;max-height:70vh;overflow:auto}
+    .doc-item{text-align:left;background:transparent;border:none;border-radius:8px;padding:9px 10px;cursor:pointer;font-family:inherit;font-size:14.5px;color:var(--ink,#3a2e22);display:flex;gap:8px;align-items:center}
+    .doc-item:hover{background:#fbf1e2}
+    .doc-item.active{background:var(--brown,#6e5849);color:#fff}
+    .doc-num{font-size:11px;font-weight:700;background:#efe0c8;color:#6e5849;border-radius:20px;padding:1px 7px;min-width:22px;text-align:center}
+    .doc-item.active .doc-num{background:rgba(255,255,255,.25);color:#fff}
+    .md h1,.md h2,.md h3{color:var(--brown,#6e5849);margin:16px 0 8px}
+    .md h1{font-size:24px} .md h2{font-size:20px} .md h3{font-size:17px}
+    .md p{line-height:1.7;margin:8px 0}
+    .md ul,.md ol{padding-left:22px;line-height:1.7}
+    .md li{margin:3px 0}
+    .md hr{border:none;border-top:1px dashed var(--line,#e6ddce);margin:16px 0}
+    .md table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+    .md th,.md td{border:1px solid var(--line,#e6ddce);padding:7px 10px;text-align:left;vertical-align:top}
+    .md th{background:#fbf1e2;color:var(--brown,#6e5849)}
+    .md :not(pre)>code{background:#f2ece0;border-radius:5px;padding:1px 6px;font-size:13.5px;font-family:'Courier New',monospace}
+    .cbwrap{position:relative;margin:12px 0}
+    .cbwrap pre{background:#2c2018;color:#eadfd3;border-radius:10px;padding:14px 14px;overflow:auto;font-size:13px;line-height:1.6}
+    .cbwrap code{font-family:'Courier New',monospace;white-space:pre}
+    .cbbtn{position:absolute;top:8px;right:8px;background:#6e5849;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer}
+    .cbbtn:hover{filter:brightness(1.1)}
+  </style>
 </head>
 <body>
   <nav class="nav">
@@ -13,11 +36,11 @@
     <a class="plain" href="/">◂ กลับหน้าแรก</a>
   </nav>
 
-  <main class="wrap" style="max-width:520px">
+  <main class="wrap" id="main" style="max-width:520px">
     <h1 style="color:var(--brown);text-align:center">ห้องเรียน</h1>
-    <p class="muted center">สำหรับผู้ที่ลงทะเบียนและยืนยันการชำระเงินแล้ว — เข้าด้วยเบอร์โทรที่ใช้สมัคร</p>
+    <p class="muted center" id="sub">สำหรับผู้ที่ลงทะเบียนและยืนยันการชำระเงินแล้ว — เข้าด้วยเบอร์โทรที่ใช้สมัคร</p>
 
-    <div class="panel" id="box"><p class="muted center">กำลังโหลด…</p></div>
+    <div id="box"><p class="muted center">กำลังโหลด…</p></div>
   </main>
 
   <div class="footer"><div class="fline">🌿 BARNBARN Workshop</div></div>
@@ -40,12 +63,16 @@
 
     // ---- เข้าด้วยเบอร์โทร ----
     function viewPhone() {
+      $('main').style.maxWidth = '520px';
+      $('sub').style.display = '';
       box().innerHTML = `
-        <div class="field"><label>เบอร์โทรศัพท์ที่ใช้สมัคร</label>
-          <input id="cphone" inputmode="tel" placeholder="08x-xxx-xxxx" style="font-size:20px;text-align:center" onkeydown="if(event.key==='Enter')login()"></div>
-        <div id="cerr"></div>
-        <button class="btn btn-primary block" id="loginbtn" onclick="login()">🚪 เข้าห้องเรียน</button>
-        <p class="hint mt">กรอกเบอร์เดียวกับที่ใช้ตอนสมัครกิจกรรม</p>`;
+        <div class="panel" style="max-width:460px;margin:0 auto">
+          <div class="field"><label>เบอร์โทรศัพท์ที่ใช้สมัคร</label>
+            <input id="cphone" inputmode="tel" placeholder="08x-xxx-xxxx" style="font-size:20px;text-align:center" onkeydown="if(event.key==='Enter')login()"></div>
+          <div id="cerr"></div>
+          <button class="btn btn-primary block" id="loginbtn" onclick="login()">🚪 เข้าห้องเรียน</button>
+          <p class="hint mt">กรอกเบอร์เดียวกับที่ใช้ตอนสมัครกิจกรรม</p>
+        </div>`;
     }
 
     async function login() {
@@ -61,17 +88,91 @@
       } catch { err.innerHTML = '<div class="alert err">เชื่อมต่อไม่สำเร็จ</div>'; btn.disabled=false; btn.textContent='🚪 เข้าห้องเรียน'; }
     }
 
-    // ---- LOGGED IN (placeholder — เนื้อหาห้องเรียนจะมาในขั้นถัดไป) ----
-    function viewIn(name) {
+    // ---- ห้องเรียน (รายการสื่อ + อ่าน .md + ดาวน์โหลด zip) ----
+    let DOCS = [];
+    async function viewIn(name) {
+      $('main').style.maxWidth = '1000px';
+      $('sub').style.display = 'none';
+      box().innerHTML = '<p class="muted center">กำลังโหลดสื่อการเรียน…</p>';
+      let items = [];
+      try { items = (await (await fetch('/api/classroom/materials')).json()).items || []; } catch {}
+      DOCS = items.filter(x => x.type === 'md');
+      const zips = items.filter(x => x.type === 'zip');
+      const zipHtml = zips.map(z => `<a class="btn btn-yellow block mt" href="/classroom/download?file=${encodeURIComponent(z.file)}">⬇️ ดาวน์โหลด ${z.title}.zip</a>`).join('');
+      const listHtml = DOCS.map((d, i) => `<button class="doc-item" id="di${i}" onclick="openDoc(${i})">${d.num?`<span class="doc-num">${d.num}</span>`:''}<span>${d.title}</span></button>`).join('');
       box().innerHTML = `
-        <div class="center">
-          <div style="font-size:56px">✅</div>
-          <h2 style="color:var(--green);margin:6px 0">เข้าสู่ห้องเรียนสำเร็จ</h2>
-          ${name?`<p class="muted">สวัสดีค่ะ คุณ${name} 🌿</p>`:''}
-          <div class="alert info mt">เนื้อหาและไฟล์ดาวน์โหลดของห้องเรียนกำลังจะเปิดในขั้นถัดไป</div>
-          <button class="btn btn-ghost block mt" onclick="logout()">ออกจากระบบ</button>
+        <div class="two-col" style="grid-template-columns:270px 1fr">
+          <aside class="panel">
+            ${name?`<p style="margin:0 0 8px;color:var(--brown)"><b>สวัสดีค่ะ คุณ${name}</b> 🌿</p>`:''}
+            <div style="font-weight:700;color:var(--brown);margin-bottom:6px">📚 บทเรียน</div>
+            <div class="cls-list">${listHtml || '<span class="muted">ยังไม่มีสื่อ</span>'}</div>
+            ${zipHtml}
+            <button class="btn btn-ghost block mt" onclick="logout()">ออกจากระบบ</button>
+          </aside>
+          <div class="panel md" id="doc"><p class="muted center">เลือกบทเรียนจากเมนูด้านซ้าย</p></div>
         </div>`;
+      if (DOCS.length) openDoc(0);
     }
+
+    async function openDoc(i) {
+      const d = DOCS[i]; if (!d) return;
+      document.querySelectorAll('.doc-item').forEach((el, k) => el.classList.toggle('active', k === i));
+      const pane = $('doc');
+      pane.innerHTML = '<p class="muted center">กำลังโหลด…</p>';
+      try {
+        const res = await fetch('/api/classroom/read?file=' + encodeURIComponent(d.file));
+        const data = await res.json();
+        if (!res.ok) { pane.innerHTML = `<div class="alert err">${data.error || 'อ่านไฟล์ไม่สำเร็จ'}</div>`; return; }
+        pane.innerHTML = mdToHtml(data.content || '');
+        pane.scrollTop = 0; window.scrollTo(0, 0);
+      } catch { pane.innerHTML = '<div class="alert err">เชื่อมต่อไม่สำเร็จ</div>'; }
+    }
+
+    // ---- markdown -> HTML (เขียนเอง ไม่ใช้ library) ----
+    let CB = [];
+    function mdToHtml(md) {
+      md = String(md).replace(/\r\n/g, '\n');
+      CB = [];
+      md = md.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => { CB.push(code.replace(/\n$/, '')); return ' C' + (CB.length - 1) + ' '; });
+      const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const inline = (s) => esc(s)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      const L = md.split('\n'); let out = '', i = 0;
+      const isBlank = (s) => /^\s*$/.test(s);
+      while (i < L.length) {
+        const line = L[i];
+        let cm = line.match(/^ C(\d+) $/);
+        if (cm) { const k = +cm[1]; out += `<div class="cbwrap"><button class="cbbtn" onclick="copyCB(${k})">คัดลอก</button><pre><code id="cb${k}">${esc(CB[k])}</code></pre></div>`; i++; continue; }
+        if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { out += '<hr>'; i++; continue; }
+        let hm = line.match(/^(#{1,6})\s+(.*)$/);
+        if (hm) { const lv = hm[1].length; out += `<h${lv}>${inline(hm[2])}</h${lv}>`; i++; continue; }
+        if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < L.length && /^\s*\|?[\s:|-]*-{2,}[\s:|-]*\|?\s*$/.test(L[i + 1])) {
+          const cells = (s) => s.trim().replace(/^\||\|$/g, '').split('|').map((c) => inline(c.trim()));
+          const head = cells(line); i += 2; const rows = [];
+          while (i < L.length && /^\s*\|.*\|\s*$/.test(L[i])) { rows.push(cells(L[i])); i++; }
+          out += '<table><thead><tr>' + head.map((h) => `<th>${h}</th>`).join('') + '</tr></thead><tbody>' +
+            rows.map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+          continue;
+        }
+        if (/^\s*[-*]\s+/.test(line)) { const it = []; while (i < L.length && /^\s*[-*]\s+/.test(L[i])) { it.push(inline(L[i].replace(/^\s*[-*]\s+/, ''))); i++; } out += '<ul>' + it.map((x) => `<li>${x}</li>`).join('') + '</ul>'; continue; }
+        if (/^\s*\d+\.\s+/.test(line)) { const it = []; while (i < L.length && /^\s*\d+\.\s+/.test(L[i])) { it.push(inline(L[i].replace(/^\s*\d+\.\s+/, ''))); i++; } out += '<ol>' + it.map((x) => `<li>${x}</li>`).join('') + '</ol>'; continue; }
+        if (isBlank(line)) { i++; continue; }
+        const para = [line]; i++;
+        while (i < L.length && !isBlank(L[i]) && !/^ C\d+ $/.test(L[i]) && !/^#{1,6}\s/.test(L[i]) && !/^\s*[-*]\s/.test(L[i]) && !/^\s*\d+\.\s/.test(L[i]) && !/^\s*\|.*\|\s*$/.test(L[i]) && !/^\s*(-{3,}|\*{3,})\s*$/.test(L[i])) { para.push(L[i]); i++; }
+        out += '<p>' + inline(para.join(' ')) + '</p>';
+      }
+      return out;
+    }
+    async function copyCB(k) {
+      const el = document.getElementById('cb' + k); if (!el) return;
+      try { await navigator.clipboard.writeText(el.textContent); } catch {}
+      const btn = el.closest('.cbwrap').querySelector('.cbbtn');
+      const t = btn.textContent; btn.textContent = 'คัดลอกแล้ว ✓';
+      setTimeout(() => { btn.textContent = t; }, 1500);
+    }
+
     async function logout() {
       await fetch('/api/classroom/logout', { method:'POST' });
       viewPhone();
