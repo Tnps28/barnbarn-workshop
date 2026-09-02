@@ -3,6 +3,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 import * as db from './db.js';
@@ -574,6 +575,67 @@ app.get('/api/admin/summary', requireAdmin, async (req, res) => {
     storage
   });
 });
+
+// ================= CLASSROOM (ห้องเรียน) — เข้าด้วยเบอร์โทรที่ลงทะเบียนไว้ [1] =================
+const CLASSROOM_SECRET = process.env.CLASSROOM_SECRET || process.env.ADMIN_PASSWORD || 'bookly-classroom-secret';
+const _clsHits = new Map();  // ip -> [timestamps] (กันสุ่มเบอร์)
+
+function clsEligibleReg(phone) {
+  const p = String(phone || '').replace(/\D/g, '');
+  if (p.length < 8) return null;
+  return db.listRegistrations().find((r) =>
+    String(r.phone || '').replace(/\D/g, '') === p && ['paid', 'confirmed'].includes(r.status)) || null;
+}
+function clsSignToken(phone) {
+  const payload = Buffer.from(JSON.stringify({ p: String(phone).replace(/\D/g, ''), x: Date.now() + 30 * 24 * 3600 * 1000 })).toString('base64url');
+  const sig = crypto.createHmac('sha256', CLASSROOM_SECRET).update(payload).digest('base64url');
+  return payload + '.' + sig;
+}
+function clsVerifyToken(tok) {
+  if (!tok || tok.indexOf('.') < 0) return null;
+  const [payload, sig] = tok.split('.');
+  const expect = crypto.createHmac('sha256', CLASSROOM_SECRET).update(payload).digest('base64url');
+  if (sig !== expect) return null;
+  try { const p = JSON.parse(Buffer.from(payload, 'base64url').toString()); return (Date.now() > p.x) ? null : p.p; } catch { return null; }
+}
+function readCookie(req, name) {
+  const h = req.headers.cookie || '';
+  const hit = h.split(';').map((s) => s.trim()).find((s) => s.startsWith(name + '='));
+  return hit ? decodeURIComponent(hit.slice(name.length + 1)) : null;
+}
+const clsIsHttps = (req) => req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
+// middleware ใช้ในขั้น [2] — ปฏิเสธถ้าไม่มี token ที่ถูกต้อง
+function requireClassroom(req, res, next) {
+  const phone = clsVerifyToken(readCookie(req, 'cls'));
+  if (!phone) return res.status(401).json({ error: 'unauthorized' });
+  req.classroomPhone = phone;
+  next();
+}
+
+app.get('/classroom', (req, res) => res.sendFile(path.join(__dirname, 'public', 'classroom.html')));
+
+// สถานะล็อกอิน (สำหรับกรณีเปิดเบราว์เซอร์ใหม่ — cookie ยังใช้ได้ไหม)
+app.get('/api/classroom/me', (req, res) => {
+  const phone = clsVerifyToken(readCookie(req, 'cls'));
+  res.json({ loggedIn: !!phone });
+});
+
+// เข้าห้องเรียนด้วยเบอร์โทรที่ลงทะเบียน+ยืนยันการชำระเงินแล้ว (ไม่ต้องใช้อีเมล/รหัส)
+app.post('/api/classroom/login', (req, res) => {
+  const ip = String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+  const now = Date.now();
+  const arr = (_clsHits.get(ip) || []).filter((t) => now - t < 10 * 60 * 1000);
+  arr.push(now); _clsHits.set(ip, arr);
+  if (arr.length > 20) return res.status(429).json({ error: 'พยายามเข้าถี่เกินไป กรุณารอสักครู่แล้วลองใหม่ค่ะ' });
+  const phone = String(req.body && req.body.phone || '').replace(/\D/g, '');
+  if (phone.length < 8) return res.status(400).json({ error: 'กรุณากรอกเบอร์โทรให้ถูกต้อง' });
+  const reg = clsEligibleReg(phone);
+  if (!reg) return res.status(404).json({ error: 'ไม่พบข้อมูลการสมัครที่ยืนยันการชำระเงินด้วยเบอร์นี้ กรุณาตรวจเบอร์อีกครั้ง หรือทักผู้จัดทาง LINE' });
+  res.cookie('cls', clsSignToken(phone), { httpOnly: true, sameSite: 'lax', secure: clsIsHttps(req), maxAge: 30 * 24 * 3600 * 1000, path: '/' });
+  res.json({ ok: true, name: reg.name });
+});
+
+app.post('/api/classroom/logout', (req, res) => { res.clearCookie('cls', { path: '/' }); res.json({ ok: true }); });
 
 // SPA-ish routes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
