@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ห้องเรียน — BARNBARN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><a href="/" style="color:inherit;display:flex;gap:10px;align-items:center"><span class="logo">🌿</span> BARNBARN</a></div>
+    <a class="plain" href="/">◂ กลับหน้าแรก</a>
+  </nav>
+
+  <main class="wrap" style="max-width:520px">
+    <h1 style="color:var(--brown);text-align:center">ห้องเรียน</h1>
+    <p class="muted center">สำหรับผู้ที่ลงทะเบียนและยืนยันการชำระเงินแล้ว — เข้าด้วยเบอร์โทรที่ใช้สมัคร</p>
+
+    <div class="panel" id="box"><p class="muted center">กำลังโหลด…</p></div>
+  </main>
+
+  <div class="footer"><div class="fline">🌿 BARNBARN Workshop</div></div>
+
+  <script>
+    let CFG = {};
+    const $ = (id) => document.getElementById(id);
+    const box = () => $('box');
+
+    async function boot() {
+      try { CFG = await (await fetch('/api/config')).json(); } catch { CFG = {}; }
+      const me = await (await fetch('/api/classroom/me')).json().catch(() => ({ loggedIn: false }));
+      if (me.loggedIn) return viewIn();
+      viewPhone();
+    }
+
+    function lineBtn() {
+      return CFG.lineAddFriendUrl ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">💬 ทักผู้จัดทาง LINE</a>` : '';
+    }
+
+    // ---- เข้าด้วยเบอร์โทร ----
+    function viewPhone() {
+      box().innerHTML = `
+        <div class="field"><label>เบอร์โทรศัพท์ที่ใช้สมัคร</label>
+          <input id="cphone" inputmode="tel" placeholder="08x-xxx-xxxx" style="font-size:20px;text-align:center" onkeydown="if(event.key==='Enter')login()"></div>
+        <div id="cerr"></div>
+        <button class="btn btn-primary block" id="loginbtn" onclick="login()">🚪 เข้าห้องเรียน</button>
+        <p class="hint mt">กรอกเบอร์เดียวกับที่ใช้ตอนสมัครกิจกรรม</p>`;
+    }
+
+    async function login() {
+      const phone = ($('cphone').value || '').trim();
+      const err = $('cerr'); err.innerHTML = '';
+      if (phone.replace(/\D/g,'').length < 8) { err.innerHTML = '<div class="alert err">กรุณากรอกเบอร์โทรให้ถูกต้อง</div>'; return; }
+      const btn = $('loginbtn'); btn.disabled = true; btn.textContent = 'กำลังเข้า…';
+      try {
+        const res = await fetch('/api/classroom/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone }) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) { err.innerHTML = `<div class="alert err">${d.error || 'เข้าไม่สำเร็จ'}</div>${lineBtn()}`; btn.disabled=false; btn.textContent='🚪 เข้าห้องเรียน'; return; }
+        viewIn(d.name);
+      } catch { err.innerHTML = '<div class="alert err">เชื่อมต่อไม่สำเร็จ</div>'; btn.disabled=false; btn.textContent='🚪 เข้าห้องเรียน'; }
+    }
+
+    // ---- LOGGED IN (placeholder — เนื้อหาห้องเรียนจะมาในขั้นถัดไป) ----
+    function viewIn(name) {
+      box().innerHTML = `
+        <div class="center">
+          <div style="font-size:56px">✅</div>
+          <h2 style="color:var(--green);margin:6px 0">เข้าสู่ห้องเรียนสำเร็จ</h2>
+          ${name?`<p class="muted">สวัสดีค่ะ คุณ${name} 🌿</p>`:''}
+          <div class="alert info mt">เนื้อหาและไฟล์ดาวน์โหลดของห้องเรียนกำลังจะเปิดในขั้นถัดไป</div>
+          <button class="btn btn-ghost block mt" onclick="logout()">ออกจากระบบ</button>
+        </div>`;
+    }
+    async function logout() {
+      await fetch('/api/classroom/logout', { method:'POST' });
+      viewPhone();
+    }
+
+    boot();
+  </script>
+</body>
+</html>
