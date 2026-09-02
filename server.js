@@ -637,6 +637,45 @@ app.post('/api/classroom/login', (req, res) => {
 
 app.post('/api/classroom/logout', (req, res) => { res.clearCookie('cls', { path: '/' }); res.json({ ok: true }); });
 
+// ---------- CLASSROOM [2]: เนื้อหา/ไฟล์จากโฟลเดอร์ materials/ (นอก public/ — ต้องล็อกอินเท่านั้น) ----------
+const MATERIALS_DIR = path.join(__dirname, 'materials');
+function listMaterials() {
+  let files = [];
+  try { files = fs.readdirSync(MATERIALS_DIR); } catch { files = []; }
+  return files.filter((f) => /\.(md|zip)$/i.test(f)).map((f) => {
+    const ext = f.split('.').pop().toLowerCase();
+    const base = f.replace(/\.(md|zip)$/i, '');
+    const m = base.match(/^(\d+)\s*[-–·]?\s*(.*)$/);
+    const num = (m && m[1]) ? m[1] : '';
+    let title = (m ? m[2] : base).replace(/-/g, ' ').trim() || base;
+    return { file: f, title, num, type: ext };
+  }).sort((a, b) => {
+    const na = a.num === '' ? 999 : parseInt(a.num, 10);
+    const nb = b.num === '' ? 999 : parseInt(b.num, 10);
+    return na - nb || a.file.localeCompare(b.file);
+  });
+}
+// อนุญาตเฉพาะไฟล์ที่อยู่ในรายการจริง (กัน path traversal เด็ดขาด)
+function safeMaterial(name, ext) {
+  const item = listMaterials().find((x) => x.file === name && x.type === ext);
+  return item ? path.join(MATERIALS_DIR, name) : null;
+}
+
+app.get('/api/classroom/materials', requireClassroom, (req, res) => {
+  res.json({ items: listMaterials() });
+});
+app.get('/api/classroom/read', requireClassroom, (req, res) => {
+  const p = safeMaterial(String(req.query.file || ''), 'md');
+  if (!p) return res.status(404).json({ error: 'ไม่พบไฟล์' });
+  try { res.json({ content: fs.readFileSync(p, 'utf-8') }); } catch { res.status(500).json({ error: 'อ่านไฟล์ไม่สำเร็จ' }); }
+});
+app.get('/classroom/download', requireClassroom, (req, res) => {
+  const name = String(req.query.file || '');
+  const p = safeMaterial(name, 'zip');
+  if (!p) return res.status(404).send('ไม่พบไฟล์');
+  res.download(p, name);
+});
+
 // SPA-ish routes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/workshop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'workshop.html')));
