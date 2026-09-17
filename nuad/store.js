@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = {
   closedDays: [3],
   slotMin: 60,
   holdMin: 15,
+  bookingOn: true,        // เปิด/ปิดการจองล่วงหน้า (ปิด = รับเฉพาะบัตรคิวหน้าร้าน)
   notifyOwner: true,
   autoRemind: true,
   ownerUserId: '',

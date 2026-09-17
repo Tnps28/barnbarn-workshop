@@ -108,7 +108,7 @@ export function mountNuad(app, { listWorkshops } = {}) {
     const days = Array.from({ length: 14 }, (_, i) => { const date = L.addDays(n.date, i); return { date, wd: L.weekday(date), closed: s.closedDays.includes(L.weekday(date)) }; });
     const q = L.todayQueue(), sv = q.find((x) => x.status === 'serving');
     res.json({
-      settings: { shopName: s.shopName, name: s.name, place: s.place, pp: s.pp, open: s.open, close: s.close, breakStart: s.breakStart, breakEnd: s.breakEnd, closedDays: s.closedDays, slotMin: L.slotLen(), holdMin: s.holdMin },
+      settings: { shopName: s.shopName, name: s.name, place: s.place, pp: s.pp, open: s.open, close: s.close, breakStart: s.breakStart, breakEnd: s.breakEnd, closedDays: s.closedDays, slotMin: L.slotLen(), holdMin: s.holdMin, bookingOn: s.bookingOn !== false },
       line: lineInfo(), today: n.date, days,
       live: { serving: sv ? sv.no : null, waiting: q.filter((x) => x.status === 'waiting').length, open: !s.closedDays.includes(L.weekday(n.date)) && n.min >= L.toMin(s.open) - 60 && n.min < L.toMin(s.close) },
     });
@@ -136,6 +136,7 @@ export function mountNuad(app, { listWorkshops } = {}) {
   const pub = (b) => ({ id: b.id, date: b.date, time: b.time, status: b.status, holdUntil: b.holdUntil, linked: !!b.lineUserId });
   const recent = new Map(); // กันกดรัว: เบอร์เดียวจองค้างจ่ายได้ทีละ 1 นัด
   app.post('/api/nuad/bookings', (req, res) => {
+    if (S().bookingOn === false) return res.status(403).json({ error: 'ตอนนี้ปิดรับจองล่วงหน้า รับเฉพาะบัตรคิวหน้าร้านค่ะ' });
     L.expireHolds();
     const { date, time, name, phone, consent } = req.body || {};
     const t = Number(time), nm = String(name || '').trim().slice(0, 40), ph = String(phone || '').replace(/[^\d]/g, '').slice(0, 12);
@@ -290,7 +291,7 @@ export function mountNuad(app, { listWorkshops } = {}) {
     if (Array.isArray(p.closedDays)) s.closedDays = p.closedDays.map(Number).filter((x) => x >= 0 && x <= 6);
     if (p.slotMin != null) s.slotMin = Math.min(240, Math.max(15, Number(p.slotMin) || 60));
     if (p.holdMin != null) s.holdMin = Math.min(180, Math.max(5, Number(p.holdMin) || 15));
-    for (const k of ['notifyOwner', 'autoRemind']) if (typeof p[k] === 'boolean') s[k] = p[k];
+    for (const k of ['notifyOwner', 'autoRemind', 'bookingOn']) if (typeof p[k] === 'boolean') s[k] = p[k];
     store.save();
     res.json({ ok: true });
   });
