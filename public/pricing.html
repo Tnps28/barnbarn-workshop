@@ -172,6 +172,19 @@
     .v-soon b { color:var(--brown); font-size:16px; }
     .v-soon span { font-size:14px; max-width:38ch; }
     .v-desc { max-width:1080px; width:100%; margin:0; color:var(--ink-soft); font-size:15px; line-height:1.6; }
+    .v-feat { max-width:1080px; width:100%; margin:0; background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+    .v-feat h4 { margin:0 0 10px; font-size:14px; color:var(--brown); letter-spacing:.02em; }
+    .v-feat ul { list-style:none; margin:0; padding:0; display:grid; gap:7px; }
+    .v-feat li { display:flex; gap:10px; align-items:baseline; font-size:14.5px; line-height:1.5; }
+    .v-feat li .fn { flex:1; color:var(--ink); }
+    .v-feat li .fp { flex:none; font-weight:700; color:var(--brown); font-variant-numeric:tabular-nums; }
+    .v-feat li .fp.inc { font-weight:600; color:var(--green); font-size:13px; }
+    .v-feat li .fp.ask { font-weight:600; color:var(--ink-soft); font-size:13px; }
+    .v-sum { margin-top:12px; padding-top:11px; border-top:1px dashed var(--line); display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+    .v-sum .k { font-size:14px; color:var(--ink-soft); }
+    .v-sum .v { font-size:19px; font-weight:800; color:var(--brown); font-variant-numeric:tabular-nums; }
+    .v-feat .foot { margin:9px 0 0; font-size:12.5px; color:var(--ink-soft); line-height:1.55; }
+    .w-price { display:block; margin-top:6px; font-size:13px; color:var(--brown); font-weight:700; }
     .v-nav { display:flex; align-items:center; gap:14px; }
     .v-count { color:var(--ink-soft); font-size:14px; font-weight:700; }
 
@@ -209,6 +222,7 @@
     :focus-visible { outline:3px solid var(--orange); outline-offset:2px; border-radius:8px; }
     @media (prefers-reduced-motion: reduce) { * { transition:none !important; } html { scroll-behavior:auto; } }
   </style>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body>
   <nav class="nav">
@@ -459,6 +473,7 @@
           <div class="v-shot" id="ovShot"></div>
         </div>
         <p class="v-desc" id="ovDesc">—</p>
+        <div class="v-feat" id="ovFeat"></div>
         <div class="v-nav">
           <button type="button" class="btn btn-ghost btn-sm" id="ovPrev">‹ หน้าก่อน</button>
           <span class="v-count" id="ovCount">—</span>
@@ -497,42 +512,57 @@
       items:["เช็คอิน QR หน้างาน","ตัดสต๊อกจริง กันขายเกิน","แจ้งเตือนอัตโนมัติก่อนถึงวัน","ตัดบัตรผ่านผู้ให้บริการชำระเงิน","เชื่อมกับระบบบัญชี/สต๊อกที่มีอยู่","ระบบสมาชิก + ประวัติการสั่งซื้อ","ตรวจสลิปอัตโนมัติ จับคู่ยอดให้","รายงานยอดขายส่งเข้าไลน์อัตโนมัติ","แต้มสะสม / คูปองส่วนลด","หลายสาขา แยกสิทธิ์เข้าถึง","ผังที่นั่ง/โต๊ะจริง ให้เลือกตำแหน่ง","หน้าจอครัว/หน้าร้าน อัปเดตสด"] }
   ];
 
-  // pages: [ชื่อหน้า, คำอธิบาย, path ที่โชว์ในแถบ url, ชื่อไฟล์ภาพใน /img/works/]
+  // pages: [ชื่อหน้า, คำอธิบาย, path, ไฟล์ภาพ, [[ฟีเจอร์, ราคา, ext?], ...]]
+  // ราคา 0 = รวมอยู่ในฐาน 2,000 แล้ว · ext:true = มีค่าบริการจากข้างนอกเพิ่ม
   var WORKS = [
     { ico:"🌿", bg:"linear-gradient(135deg,#d9edf7,#fff3d6)", name:"BARNBARN Workshop",
       what:"เว็บรับสมัครเวิร์กช็อปของบ้าน-บ้านเอง — สมัคร จ่าย ยืนยัน จบในเว็บเดียว",
       url:"https://barnbarn-workshop.onrender.com",
       pages:[
-        ["หน้าแรก","การ์ดเวิร์กช็อปทุกรอบที่เปิดรับ พร้อมปฏิทินรายเดือน แตะวันที่มีกิจกรรมแล้วเด้งไปหน้าสมัครทันที","/","barnbarn-home.png"],
-        ["หน้าสมัคร","ฟอร์ม 3 สเต็ป กรอกผู้แทน สมาชิกในกลุ่ม และข้อมูลที่ต้องรู้ก่อนวันงาน แนบสลิปได้ในหน้าเดียว","/workshop","barnbarn-workshop.png"],
-        ["ดูการสมัครของฉัน","ลูกค้าค้นด้วยเบอร์โทรอย่างเดียว ไม่ต้องสมัครสมาชิก ไม่ต้องจำรหัส","/my","barnbarn-my.png"],
-        ["หลังบ้านแอดมิน","ตารางรายชื่อทั้งหมด กดยืนยันสลิป แก้รอบ และโหลดออกเป็น Excel ไปทำต่อได้","/admin","barnbarn-admin.png"]
+        ["หน้าแรก","การ์ดเวิร์กช็อปทุกรอบที่เปิดรับ พร้อมปฏิทินรายเดือน แตะวันที่มีกิจกรรมแล้วเด้งไปหน้าสมัครทันที","/","barnbarn-home.png",
+          [["หน้าหลัก เปิดสวยบนมือถือ",0],["ปฏิทินรอบ ตั้งค่าเองได้",0],["โชว์ที่นั่งเหลือแต่ละรอบ",0],["ปุ่มลงปฏิทินมือถือ + นับถอยหลัง",750]]],
+        ["หน้าสมัคร","ฟอร์ม 3 สเต็ป กรอกผู้แทน สมาชิกในกลุ่ม และข้อมูลที่ต้องรู้ก่อนวันงาน แนบสลิปได้ในหน้าเดียว","/workshop","barnbarn-workshop.png",
+          [["หน้าย่อย 1 หน้า",800],["สมัครหลายคนในใบเดียว",750],["ที่นั่งลดเองเมื่อมีคนจอง",1000],["แนบสลิป + แอดมินกดยืนยัน",1000],["อีเมลยืนยันอัตโนมัติ",1000]]],
+        ["ดูการสมัครของฉัน","ลูกค้าค้นด้วยเบอร์โทรอย่างเดียว ไม่ต้องสมัครสมาชิก ไม่ต้องจำรหัส","/my","barnbarn-my.png",
+          [["หน้าย่อย 1 หน้า",800],["หน้า “ดูรายการของฉัน” ค้นด้วยเบอร์",750],["เช็คอิน QR หน้างาน",1250,true]]],
+        ["หลังบ้านแอดมิน","ตารางรายชื่อทั้งหมด กดยืนยันสลิป แก้รอบ และโหลดออกเป็น Excel ไปทำต่อได้","/admin","barnbarn-admin.png",
+          [["หลังบ้าน ล็อกอินแก้เองได้",0],["โหลดข้อมูลออกเป็น Excel",0],["แจ้งเตือนเข้าไลน์เมื่อมีออเดอร์",1000],["แจ้งเตือนอัตโนมัติก่อนถึงวัน",1250,true]]]
       ] },
     { ico:"🥬", bg:"linear-gradient(135deg,#eaf6e2,#fff3d6)", name:"ตลาดคุณปู่ @หนองจอก",
       what:"เว็บตลาดสีเขียวกลางทุ่งนา คลอง 14 — บอกวันเปิด รวมร้านค้า และรับสมัครผู้ขาย",
       url:"https://taladkhunpoo.onrender.com",
       pages:[
-        ["หน้าแรก","วันเปิดตลาดรอบถัดไปตัวใหญ่กลางจอ เห็นปุ๊บรู้ปั๊บว่าต้องมาวันไหน แล้วไล่ลงไปเจอที่มาของตลาด ปฏิทินรอบ และแกลเลอรีรูปในหน้าเดียว","/","khunpoo-home.png"],
-        ["ร้านในตลาด","รวมร้านค้าที่มาออก คนหาของเฉพาะอย่างจะได้รู้ล่วงหน้าว่ามีไหม","/#shops","khunpoo-shops.png"],
-        ["สมัครเป็นผู้ขาย","พ่อค้าแม่ค้ากรอกสมัครเข้ามา แอดมินกดอนุมัติในหลังบ้าน","/#apply","khunpoo-apply.png"]
+        ["หน้าแรก","วันเปิดตลาดรอบถัดไปตัวใหญ่กลางจอ เห็นปุ๊บรู้ปั๊บว่าต้องมาวันไหน แล้วไล่ลงไปเจอที่มาของตลาด ปฏิทินรอบ และแกลเลอรีรูปในหน้าเดียว","/","khunpoo-home.png",
+          [["หน้าหลัก เปิดสวยบนมือถือ",0],["ปฏิทินวันเปิด ตั้งค่าเองได้",0],["แกลเลอรีรูป แยกอัลบั้ม",750]]],
+        ["ร้านในตลาด","รวมร้านค้าที่มาออก คนหาของเฉพาะอย่างจะได้รู้ล่วงหน้าว่ามีไหม","/#shops","khunpoo-shops.png",
+          [["กรองร้านตามหมวด",750],["รายการร้านค้า คิดรายการละ 400 ฿ ตามจำนวนที่ใส่",-1]]],
+        ["สมัครเป็นผู้ขาย","พ่อค้าแม่ค้ากรอกสมัครเข้ามา แอดมินกดอนุมัติในหลังบ้าน","/#apply","khunpoo-apply.png",
+          [["ฟอร์มสมัคร ถึงเราจริง",0],["สมัครเป็นผู้ขาย/พาร์ทเนอร์ รออนุมัติ",1000]]]
       ] },
     { ico:"🌳", bg:"linear-gradient(135deg,#e2f0e6,#d9edf7)", name:"Always Trees",
       what:"เว็บรับออกแบบและจัดสวน — มีเครื่องมือให้ลูกค้าลองจัดสวนเองก่อนตัดสินใจจ้าง",
       url:"https://always-trees.onrender.com",
       pages:[
-        ["หน้าแรก","บริการที่รับทำ ผลงานที่ผ่านมา และช่องทางติดต่อ จบในหน้าเดียว","/","trees-home.png"],
-        ["แคตตาล็อกต้นไม้","ค้นและกรองต้นไม้ตามชนิดและการใช้งาน ลูกค้าเลือกได้เองว่าชอบต้นไหน","/catalog","trees-catalog.png"],
-        ["ลองจัดสวนหน้ากำแพงเอง","ลากต้นไม้มาวางบนกำแพงจำลอง เห็นภาพก่อนจ้างจริง — ตัวนี้คือเหตุผลที่คนทักเข้ามา","/tool","trees-tool.png"]
+        ["หน้าแรก","บริการที่รับทำ ผลงานที่ผ่านมา และช่องทางติดต่อ จบในหน้าเดียว","/","trees-home.png",
+          [["หน้าหลัก เปิดสวยบนมือถือ",0],["ออกแบบใหม่ทั้งเว็บ ไม่ใช้เทมเพลต",2000],["แกลเลอรีผลงาน แยกอัลบั้ม",750]]],
+        ["แคตตาล็อกต้นไม้","ค้นและกรองต้นไม้ตามชนิดและการใช้งาน ลูกค้าเลือกได้เองว่าชอบต้นไหน","/catalog","trees-catalog.png",
+          [["หน้าย่อย แบบออกแบบใหม่",1000],["กรองต้นไม้ตามหมวด",750],["แคตตาล็อกแบบไม่โชว์ราคา",750]]],
+        ["ลองจัดสวนหน้ากำแพงเอง","ลากต้นไม้มาวางบนกำแพงจำลอง เห็นภาพก่อนจ้างจริง — ตัวนี้คือเหตุผลที่คนทักเข้ามา","/tool","trees-tool.png",
+          [["หน้าย่อย แบบออกแบบใหม่",1000],["เครื่องมือลากวางเฉพาะทาง — ประเมินราคาแยก",-1]]]
       ] },
     { ico:"🍽️", bg:"linear-gradient(135deg,#fff3d6,#fde3d0)", name:"Seed Restaurant POS",
       what:"ระบบขายหน้าร้านที่ทำเป็นเว็บ ใช้บนแท็บเล็ตหรือมือถือ ไม่ต้องซื้อเครื่อง POS",
       url:"https://seed-restaurant-cafe.onrender.com",
       pages:[
-        ["หน้าขาย","กดเมนู ออกบิล คิดเงิน ใช้ได้ทั้งบนแท็บเล็ตและมือถือ","/","seed-sell.png"],
-        ["จอครัวและบาร์","ออเดอร์เด้งขึ้นจอหลังร้านทันทีที่กดสั่ง อัปเดตสดไม่ต้องรีเฟรช","/kitchen","seed-kitchen.png"],
-        ["สรุปยอดขาย","ดูยอดรายวัน และโหลดออกไปทำบัญชีต่อได้","/report","seed-report.png"]
+        ["หน้าขาย","กดเมนู ออกบิล คิดเงิน ใช้ได้ทั้งบนแท็บเล็ตและมือถือ","/","seed-sell.png",
+          [["หน้าหลัก เปิดสวยบนมือถือ",0],["QR พร้อมเพย์",0],["ตัดสต๊อกจริง กันขายเกิน",1250]]],
+        ["จอครัวและบาร์","ออเดอร์เด้งขึ้นจอหลังร้านทันทีที่กดสั่ง อัปเดตสดไม่ต้องรีเฟรช","/kitchen","seed-kitchen.png",
+          [["หน้าย่อย 1 หน้า",800],["หน้าจอครัว/หน้าร้าน อัปเดตสด",1250],["หลายสาขา แยกสิทธิ์เข้าถึง",1250]]],
+        ["สรุปยอดขาย","ดูยอดรายวัน และโหลดออกไปทำบัญชีต่อได้","/report","seed-report.png",
+          [["หน้าย่อย 1 หน้า",800],["โหลดข้อมูลออกเป็น Excel",0],["รายงานยอดขายส่งเข้าไลน์อัตโนมัติ",1250,true],["ตรวจสลิปอัตโนมัติ จับคู่ยอดให้",1250,true]]]
       ] }
   ];
+
   var IMG_BASE = "/img/works/";
 
   var CARE = [
@@ -587,6 +617,7 @@
       '<span class="thumb" style="background:' + w.bg + '">' + w.ico + '</span>' +
       '<span class="wbody"><h3>' + esc(w.name) + '</h3>' +
       '<span class="w-what">' + esc(w.what) + '</span>' +
+      '<span class="w-price">ทำเว็บแบบนี้ ≈ ' + fmt(sumWork(w).total) + (sumWork(w).ask ? ' + งานเฉพาะทาง' : '') + '</span>' +
       '<span class="w-more">ดูหน้าในเว็บนี้ (' + w.pages.length + ' หน้า) →</span></span></button>';
   }).join("");
 
@@ -760,12 +791,50 @@
   // full-screen site viewer
   var lastFocus = null, curW = 0, curP = 0;
 
+  // รวมราคาฟีเจอร์ของหน้าหนึ่ง (ข้าม 0 = รวมในฐาน, -1 = ประเมินแยก)
+  function sumFeat(list){
+    var t = 0, ask = false, ext = false;
+    (list || []).forEach(function(f){
+      if (f[1] === -1) ask = true; else t += f[1];
+      if (f[2]) ext = true;
+    });
+    return { total:t, ask:ask, ext:ext };
+  }
+  // ราคารวมทั้งเว็บ = ฐาน 2,000 + ฟีเจอร์ทุกหน้า
+  function sumWork(w){
+    var t = P.base, ask = false, ext = false;
+    w.pages.forEach(function(pg){
+      var s = sumFeat(pg[4]);
+      t += s.total; ask = ask || s.ask; ext = ext || s.ext;
+    });
+    return { total:t, ask:ask, ext:ext };
+  }
+
+  function renderFeat(list){
+    var box = $("ovFeat");
+    if (!list.length) { box.innerHTML = ""; box.style.display = "none"; return; }
+    box.style.display = "";
+    var s = sumFeat(list);
+    var rows = list.map(function(f){
+      var price = f[1] === 0 ? '<span class="fp inc">รวมในฐานแล้ว</span>'
+                : f[1] === -1 ? '<span class="fp ask">ประเมินแยก</span>'
+                : '<span class="fp">+' + fmt(f[1]) + '</span>';
+      return '<li><span class="fn">' + esc(f[0]) + (f[2] ? ' <b>*</b>' : '') + '</span>' + price + '</li>';
+    }).join("");
+    var sum = s.total > 0
+      ? '<div class="v-sum"><span class="k">หน้านี้เพิ่มจากฐาน</span><span class="v">+' + fmt(s.total) + '</span></div>'
+      : '<div class="v-sum"><span class="k">หน้านี้</span><span class="v">รวมอยู่ในฐาน 2,000 ฿ แล้ว</span></div>';
+    var foot = s.ext ? '<p class="foot"><b>*</b> ข้อที่มีดอกจันต้องพึ่งบริการจากข้างนอก เช่น ค่าส่งข้อความหรือค่าระบบตรวจสลิป — จ่ายกับผู้ให้บริการนั้นตามจริง ไม่รวมในราคานี้</p>' : '';
+    box.innerHTML = '<h4>หน้านี้มีอะไร และคิดเท่าไหร่</h4><ul>' + rows + '</ul>' + sum + foot;
+  }
+
   function showPage(pi){
     var w = WORKS[curW], p = w.pages[pi];
     if (!p) return;
     curP = pi;
     $("ovUrl").textContent = w.url.replace(/^https?:\/\//, "") + (p[2] === "/" ? "" : p[2]);
     $("ovDesc").textContent = p[1];
+    renderFeat(p[4] || []);
     $("ovCount").textContent = (pi + 1) + " / " + w.pages.length;
     $("ovPrev").disabled = pi === 0;
     $("ovNext").disabled = pi === w.pages.length - 1;
