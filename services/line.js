@@ -1,52 +1,130 @@
-// services/line.js — ส่งข้อความยืนยันผ่าน LINE Official Account (Messaging API)
-// LINE Official Account confirmation via the Messaging API push endpoint.
-// If no access token is set, the message is stored on the registration so the
-// admin can copy it and send it manually from the LINE OA app.
+// services/line.js — LINE OA ของ "บ้าน-บ้าน สุขพอดี" (Messaging API)
+// reply = ตอบตอนลูกค้าทักมา (ฟรี ไม่นับโควตา) · push = เราส่งเอง (นับโควตา 300/เดือน)
+// อ่านค่า env แบบ lazy เพราะ server.js โหลด .env หลัง import โมดูลนี้
+import crypto from 'crypto';
 
-const TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-export const lineConfigured = () => Boolean(TOKEN);
+const token = () => process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+const secret = () => process.env.LINE_CHANNEL_SECRET || '';
 
-// Build a nice Thai confirmation message for a registration.
+export const lineConfigured = () => Boolean(token());
+export const canVerify = () => Boolean(secret());
+
+// ตรวจลายเซ็นของ LINE — กันคนปลอมข้อความมาผูกใบสมัครของคนอื่น
+export function verify(raw, signature) {
+  if (!secret() || !raw || !signature) return false;
+  const a = Buffer.from(crypto.createHmac('sha256', secret()).update(raw).digest('base64'));
+  const b = Buffer.from(String(signature));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function call(kind, body) {
+  const r = await fetch('https://api.line.me/v2/bot/message/' + kind, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`LINE ${kind} ${r.status}: ${await r.text()}`);
+  return true;
+}
+
+// ตอบกลับตอนลูกค้าทักมา — ฟรี ใช้ได้ภายใน ~30 วินาทีหลังได้ replyToken
+export async function reply(replyToken, text) {
+  if (!lineConfigured() || !replyToken || !text) return false;
+  try {
+    return await call('reply', { replyToken, messages: [{ type: 'text', text }] });
+  } catch (e) {
+    console.error('LINE reply:', e.message);
+    return false;
+  }
+}
+
+// ส่งเอง — ต้องรู้ userId ของลูกค้า (ได้จาก webhook ตอนเขาส่งรหัสอ้างอิงมาในแชท)
+// คืน { sent, demo, error? } เพื่อให้หน้าแอดมินรู้ว่าต้องก๊อปส่งเองไหม
+export async function pushMessage(userId, text) {
+  if (!lineConfigured() || !userId) return { sent: false, demo: true };
+  try {
+    await call('push', { to: userId, messages: [{ type: 'text', text }] });
+    return { sent: true };
+  } catch (e) {
+    console.error('LINE push:', e.message);
+    return { sent: false, error: e.message };
+  }
+}
+
+// ---------------------------------------------------------------- ข้อความสำเร็จรูป
+const money = (n) => Number(n || 0).toLocaleString('th-TH');
+const roundTxt = (round) => (round ? `${round.date} เวลา ${round.time}` : '');
+
+// ยืนยันที่นั่งหลังแอดมินตรวจสลิปแล้ว
 export function buildConfirmationMessage(reg, workshop, round) {
-  const dateTxt = round ? `${round.date} เวลา ${round.time}` : '';
   return [
     '🌿 ยืนยันการสมัคร BARNBARN สำเร็จแล้ว!',
     '',
     `เวิร์กช็อป: ${workshop ? workshop.title : ''}`,
-    dateTxt ? `รอบ: ${dateTxt}` : '',
+    roundTxt(round) ? `รอบ: ${roundTxt(round)}` : '',
     workshop && workshop.location ? `สถานที่: ${workshop.location}` : '',
     `ชื่อผู้สมัคร: ${reg.name}`,
     `จำนวน: ${reg.people} ท่าน`,
-    `ยอดชำระ: ${Number(reg.amount).toLocaleString('th-TH')} บาท (ชำระแล้ว ✓)`,
+    `ยอดชำระ: ${money(reg.amount)} บาท (ชำระแล้ว ✓)`,
     `รหัสอ้างอิง: ${reg.id}`,
     '',
     'แล้วพบกันที่เวิร์กช็อปนะคะ 😊 หากมีคำถามทักแชทนี้ได้เลยค่ะ'
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ].filter(Boolean).join('\n');
 }
 
-// Push a message to a LINE user. Requires their LINE userId (obtained when they
-// message your OA / via webhook). Returns { sent, demo, error? }.
-export async function pushMessage(userId, text) {
-  if (!lineConfigured() || !userId) {
-    return { sent: false, demo: true };
-  }
-  try {
-    const res = await fetch('https://api.line.me/v2/bot/message/push', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + TOKEN,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ to: userId, messages: [{ type: 'text', text }] })
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      return { sent: false, error: err };
-    }
-    return { sent: true };
-  } catch (e) {
-    return { sent: false, error: String(e) };
-  }
+// ตอบตอนลูกค้าส่งรหัสอ้างอิงเข้ามาในแชท (ผูกบัญชีไลน์กับใบสมัครสำเร็จ)
+export function buildLinkedMessage(reg, workshop, round) {
+  const status = reg.status === 'confirmed' || reg.confirmed
+    ? 'สถานะ: ยืนยันที่นั่งแล้ว ✓'
+    : reg.status === 'awaiting_verification'
+      ? 'สถานะ: ได้รับสลิปแล้ว กำลังตรวจสอบค่ะ'
+      : 'สถานะ: รอชำระเงิน';
+  return [
+    '✅ เชื่อมบัญชี LINE กับใบสมัครเรียบร้อยแล้วค่ะ',
+    '',
+    `เวิร์กช็อป: ${workshop ? workshop.title : ''}`,
+    roundTxt(round) ? `รอบ: ${roundTxt(round)}` : '',
+    `ชื่อผู้สมัคร: ${reg.name}`,
+    `รหัสอ้างอิง: ${reg.id}`,
+    status,
+    '',
+    'ต่อจากนี้เราจะส่งข้อความยืนยันและข่าวสารของรอบนี้มาที่แชทนี้นะคะ 🌿'
+  ].filter(Boolean).join('\n');
+}
+
+// ตอบตอนลูกค้าแจ้งชำระเงิน (เว็บเรียก push เพราะไม่มี replyToken)
+export function buildSlipReceivedMessage(reg, workshop, round) {
+  return [
+    '📩 ได้รับสลิปของคุณแล้วค่ะ',
+    '',
+    `เวิร์กช็อป: ${workshop ? workshop.title : ''}`,
+    roundTxt(round) ? `รอบ: ${roundTxt(round)}` : '',
+    `ยอดที่แจ้งโอน: ${money(reg.amount)} บาท`,
+    `รหัสอ้างอิง: ${reg.id}`,
+    '',
+    'ผู้จัดกำลังตรวจสอบ และจะส่งข้อความยืนยันที่นั่งมาที่แชทนี้ค่ะ 🌿'
+  ].filter(Boolean).join('\n');
+}
+
+// ตอบตอนมีคนกดแอดเพื่อน
+export function buildWelcomeMessage() {
+  return [
+    '🌿 ยินดีต้อนรับสู่ บ้าน-บ้าน สุขพอดี ค่ะ',
+    '',
+    'ถ้าคุณสมัครเวิร์กช็อปไว้แล้ว ให้ส่ง "รหัสอ้างอิง" ที่ได้จากหน้าเว็บ',
+    '(ขึ้นต้นด้วย reg_) มาในแชทนี้ได้เลยค่ะ',
+    'ระบบจะผูกให้อัตโนมัติ แล้วส่งข้อความยืนยันที่นั่งมาที่นี่',
+    '',
+    'มีคำถามอื่นทักมาได้เลยนะคะ 😊'
+  ].join('\n');
+}
+
+// ตอบตอนส่งรหัสมาแต่หาไม่เจอ
+export function buildNotFoundMessage() {
+  return [
+    'ไม่พบใบสมัครที่ตรงกับรหัสนี้ค่ะ 😢',
+    '',
+    'ลองตรวจดูรหัสอ้างอิงจากหน้าเว็บอีกครั้ง (ขึ้นต้นด้วย reg_)',
+    'หรือพิมพ์มาบอกเราได้เลยค่ะ เดี๋ยวช่วยตรวจให้'
+  ].join('\n');
 }
