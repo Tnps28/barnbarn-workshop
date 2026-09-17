@@ -420,12 +420,27 @@
       if (INFO_STEP === 0) { renderStep1(); return; }
       renderInfo(INFO_STEP - 1);
     }
+    // โหมดทดสอบ — กรอกแค่ชื่อนี้ในช่องแรกก็สมัครได้เลย ไม่ต้องกรอกอย่างอื่น
+    const TEST_NAME = 'Bell2355';
+    const isTestName = (n) => String(n || '').trim().toLowerCase() === TEST_NAME.toLowerCase();
+
     function infoNext() {
       saveInfo(INFO_STEP);
+      if (INFO_STEP === 0 && isTestName(FORM.rep.name)) { submitTest(); return; }
       const err = validateInfo(INFO_STEP);
       if (err) { showErr(err); return; }
       if (INFO_STEP === PEOPLE) { submitReg(); return; }
       renderInfo(INFO_STEP + 1);
+    }
+
+    // ข้ามทุกขั้นแล้วส่งเลย ที่เหลือเซิร์ฟเวอร์เติมค่าทดสอบให้เอง
+    function submitTest() {
+      PDPA_CONSENT = true;
+      FORM.members = Array.from({ length: Math.max(0, PEOPLE - 1) }, (_, i) => ({ name: `ผู้ร่วมทดสอบ ${i + 2}`, age: '30' }));
+      FORM.health = { allergy: '', foodAvoid: '', medical: '' };
+      FORM.emergency = { name: '', phone: '', relation: '' };
+      FORM.note = 'ใบทดสอบระบบ';
+      submitReg();
     }
 
     async function submitReg() {
@@ -562,19 +577,19 @@
         : '';
     }
     function lineLinkBox(regId) {
-      if (!CFG.lineAddFriendUrl && !CFG.lineOaId) return '';
       const send = oaChatHref(regId);
+      if (!send && !CFG.lineAddFriendUrl) return '';
+      // กดปุ่มเดียวจบ — LINE จะเพิ่มเพื่อน OA ให้เองพร้อมส่งรหัสเข้าแชท
       return `
         <div class="panel mt" style="box-shadow:none;border:1px solid var(--line);text-align:left">
-          <b style="color:var(--brown)">รับการยืนยันทาง LINE (แนะนำ)</b>
-          <ol style="margin:8px 0 0;padding-left:20px;line-height:1.9">
-            <li>เพิ่มเพื่อน LINE Official ของบ้าน-บ้าน</li>
-            <li>ส่งรหัสอ้างอิง <b>${regId}</b> เข้าไปในแชท</li>
-          </ol>
-          <p class="hint" style="margin:8px 0 0">ระบบจะผูกให้อัตโนมัติ แล้วส่งใบยืนยันที่นั่งมาที่แชทนี้ค่ะ</p>
-          ${CFG.lineAddFriendUrl ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ 1. เพิ่มเพื่อน LINE</a>` : ''}
-          ${send ? `<a class="btn btn-primary block mt" href="${send}" target="_blank" rel="noopener">💬 2. ส่งรหัส ${regId} ในแชท</a>`
-                 : `<button class="btn btn-yellow block mt" onclick="copyText('${regId}');this.textContent='คัดลอกรหัสแล้ว ✓'">📋 คัดลอกรหัส ${regId}</button>`}
+          <b style="color:var(--brown)">🎟️ รับบัตรเข้างานทาง LINE</b>
+          <p class="hint" style="margin:6px 0 0">กดปุ่มด้านล่างครั้งเดียว ระบบจะเพิ่มเพื่อน LINE ของบ้าน-บ้านให้อัตโนมัติ
+          แล้วส่ง QR บัตรเข้างานกลับมาในแชททันที — วันงานเปิดให้ผู้จัดสแกนได้เลย</p>
+          ${send
+            ? `<a class="btn btn-primary block mt" href="${send}" target="_blank" rel="noopener">💬 รับบัตรเข้างานใน LINE</a>`
+            : `<a class="btn btn-primary block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ เพิ่มเพื่อน LINE แล้วส่งรหัส ${regId}</a>`}
+          <p class="hint" style="margin:8px 0 0">รหัสอ้างอิงของคุณ: <b>${regId}</b>
+            <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="copyText('${regId}');this.textContent='คัดลอกแล้ว ✓'">คัดลอก</button></p>
         </div>`;
     }
 

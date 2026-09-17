@@ -75,11 +75,11 @@
       ? `https://line.me/R/oaMessage/${encodeURIComponent(CFG.lineOaId)}/?${encodeURIComponent(text)}`
       : '';
 
-    // ปุ่มเชื่อมไลน์: ส่งรหัสอ้างอิงเข้าแชท OA แล้วระบบผูกให้อัตโนมัติ
+    // ปุ่มเดียวจบ: LINE จะเพิ่มเพื่อน OA ให้เอง พร้อมส่งรหัสเข้าแชท แล้วระบบตอบบัตร QR กลับมา
     function lineLinkBtn(regId) {
       const send = oaChatHref(regId);
-      if (send) return `<a class="btn btn-blue block mt" href="${send}" target="_blank" rel="noopener">💬 ส่งรหัสในแชท LINE เพื่อรับการยืนยัน</a>`;
-      if (CFG.lineAddFriendUrl) return `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ เพิ่มเพื่อน LINE ผู้จัด</a>`;
+      if (send) return `<a class="btn btn-blue block mt" href="${send}" target="_blank" rel="noopener">🎟️ รับบัตรเข้างานใน LINE</a>`;
+      if (CFG.lineAddFriendUrl) return `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ เพิ่มเพื่อน LINE แล้วส่งรหัส ${regId}</a>`;
       return '';
     }
 
