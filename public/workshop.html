@@ -481,7 +481,7 @@
       if (!info.configured) {
         area.innerHTML = `<div class="alert warn">ผู้จัดยังไม่ได้ตั้งค่าช่องทางการชำระเงิน กรุณาติดต่อผู้จัดทาง LINE
           เพื่อแจ้งรหัสอ้างอิง <b>${REG.id}</b> และสอบถามวิธีชำระเงินค่ะ</div>
-          ${CFG.lineAddFriendUrl ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE ผู้จัด</a>` : ''}`;
+          ${lineLinkBox(REG.id)}`;
         return;
       }
       const acc = info.accountNumber
@@ -554,18 +554,39 @@
       successView();
     }
 
-    function successView() {
-      const addFriend = CFG.lineAddFriendUrl
-        ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE เพื่อรับการยืนยัน</a>`
+
+    // ---- เชื่อมไลน์: แอดเพื่อน OA แล้วส่งรหัสอ้างอิงเข้าแชท ระบบจะผูกให้อัตโนมัติ ----
+    function oaChatHref(text) {
+      return CFG.lineOaId
+        ? `https://line.me/R/oaMessage/${encodeURIComponent(CFG.lineOaId)}/?${encodeURIComponent(text)}`
         : '';
+    }
+    function lineLinkBox(regId) {
+      if (!CFG.lineAddFriendUrl && !CFG.lineOaId) return '';
+      const send = oaChatHref(regId);
+      return `
+        <div class="panel mt" style="box-shadow:none;border:1px solid var(--line);text-align:left">
+          <b style="color:var(--brown)">รับการยืนยันทาง LINE (แนะนำ)</b>
+          <ol style="margin:8px 0 0;padding-left:20px;line-height:1.9">
+            <li>เพิ่มเพื่อน LINE Official ของบ้าน-บ้าน</li>
+            <li>ส่งรหัสอ้างอิง <b>${regId}</b> เข้าไปในแชท</li>
+          </ol>
+          <p class="hint" style="margin:8px 0 0">ระบบจะผูกให้อัตโนมัติ แล้วส่งใบยืนยันที่นั่งมาที่แชทนี้ค่ะ</p>
+          ${CFG.lineAddFriendUrl ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ 1. เพิ่มเพื่อน LINE</a>` : ''}
+          ${send ? `<a class="btn btn-primary block mt" href="${send}" target="_blank" rel="noopener">💬 2. ส่งรหัส ${regId} ในแชท</a>`
+                 : `<button class="btn btn-yellow block mt" onclick="copyText('${regId}');this.textContent='คัดลอกรหัสแล้ว ✓'">📋 คัดลอกรหัส ${regId}</button>`}
+        </div>`;
+    }
+
+    function successView() {
+      const addFriend = lineLinkBox(REG.id);
       document.getElementById('root').innerHTML = `
         <div class="panel center" style="max-width:560px;margin:0 auto">
           <div style="font-size:64px">📩</div>
           <h1 style="color:var(--green)">แจ้งชำระเงินเรียบร้อย!</h1>
           <p>ขอบคุณค่ะ ${REG.name} 🌿 เราได้รับสลิปของคุณแล้ว</p>
           <div class="alert info">รหัสอ้างอิง: <b>${REG.id}</b><br>
-            ผู้จัดกำลังตรวจสอบการชำระเงิน และจะส่งข้อความยืนยันที่นั่งให้คุณเร็ว ๆ นี้ค่ะ
-            ${CFG.lineAddFriendUrl ? 'กรุณาเพิ่มเพื่อน LINE เพื่อรับการยืนยัน' : ''}</div>
+            ผู้จัดกำลังตรวจสอบการชำระเงิน และจะส่งข้อความยืนยันที่นั่งให้คุณเร็ว ๆ นี้ค่ะ</div>
           ${addFriend}
           ${REG_ROUND ? `<a class="btn btn-blue block mt" href="${calendarLink(REG_ROUND)}" target="_blank" rel="noopener">📅 เพิ่มลงปฏิทิน (กันลืมวัน)</a>` : ''}
           ${mapLink() ? `<a class="btn btn-ghost block mt" href="${mapLink()}" target="_blank" rel="noopener">📍 ดูแผนที่สถานที่</a>` : ''}
@@ -576,9 +597,7 @@
 
     // กิจกรรมฟรี — ยืนยันการสมัครทันที ไม่มีขั้นตอนชำระเงิน
     function freeSuccessView() {
-      const addFriend = CFG.lineAddFriendUrl
-        ? `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank">➕ เพิ่มเพื่อน LINE Official</a>`
-        : '';
+      const addFriend = lineLinkBox(REG.id);
       document.getElementById('root').innerHTML = `
         <div class="panel center" style="max-width:560px;margin:0 auto">
           <div style="font-size:64px">🎉</div>

@@ -67,6 +67,22 @@
       renderResults(data);
     }
 
+    // ค่า config สาธารณะ (ลิงก์ LINE OA) โหลดครั้งเดียว
+    let CFG = {};
+    fetch('/api/config').then(r => r.json()).then(c => { CFG = c || {}; }).catch(() => {});
+
+    const oaChatHref = (text) => CFG.lineOaId
+      ? `https://line.me/R/oaMessage/${encodeURIComponent(CFG.lineOaId)}/?${encodeURIComponent(text)}`
+      : '';
+
+    // ปุ่มเชื่อมไลน์: ส่งรหัสอ้างอิงเข้าแชท OA แล้วระบบผูกให้อัตโนมัติ
+    function lineLinkBtn(regId) {
+      const send = oaChatHref(regId);
+      if (send) return `<a class="btn btn-blue block mt" href="${send}" target="_blank" rel="noopener">💬 ส่งรหัสในแชท LINE เพื่อรับการยืนยัน</a>`;
+      if (CFG.lineAddFriendUrl) return `<a class="btn btn-blue block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ เพิ่มเพื่อน LINE ผู้จัด</a>`;
+      return '';
+    }
+
     function renderResults(data) {
       const box = document.getElementById('results');
       const name = data.registrations[0].name;
@@ -88,10 +104,12 @@
             <div style="text-align:center;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)">
               <div id="qr-${r.id}" style="display:inline-block"></div>
               <div class="muted" style="font-size:12px;margin-top:6px">📷 แสดง QR นี้ให้ผู้จัดสแกน เพื่อเช็คอินหน้างาน</div>
-            </div>`}
+            </div>
+            ${lineLinkBtn(r.id)}`}
           </div></div>`).join('')}
         </div>
-        <div class="alert info mt">มีคำถามเรื่องการชำระเงินหรือยืนยันที่นั่ง? ทักผู้จัดทาง LINE ได้เลยค่ะ</div>`;
+        <div class="alert info mt">มีคำถามเรื่องการชำระเงินหรือยืนยันที่นั่ง? ทักผู้จัดทาง LINE ได้เลยค่ะ</div>
+        ${CFG.lineAddFriendUrl ? `<a class="btn btn-ghost block mt" href="${CFG.lineAddFriendUrl}" target="_blank" rel="noopener">➕ เพิ่มเพื่อน LINE บ้าน-บ้าน สุขพอดี</a>` : ''}`;
       // สร้าง QR ต่อรายการ (เข้ารหัสรหัสอ้างอิง) สำหรับให้ผู้จัดสแกนเช็คอิน
       data.registrations.forEach(r => {
         if (['cancelled','expired'].includes(r.status)) return;
