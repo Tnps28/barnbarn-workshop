@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>รับทำเว็บ — บ้าน-บ้าน สุขพอดี | เลือกของที่อยากได้ แล้วราคาขึ้นเอง</title>
+  <meta name="description" content="รับทำเว็บให้ร้านและกิจการเล็ก เริ่มต้น 2,000 บาท กดเลือกทีละอย่างแล้วเห็นราคาทันที ไม่มีแพ็กเหมา ไม่มีค่ารายเดือนบังคับ" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="รับทำเว็บ — บ้าน-บ้าน สุขพอดี" />
+  <meta property="og:description" content="เลือกของที่อยากได้ แล้วราคาจะขึ้นเอง เริ่มต้น 2,000 บาท ไม่มีค่ารายเดือนบังคับ" />
+  <meta property="og:locale" content="th_TH" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    body { padding-bottom: 104px; }
+
+    .step { margin-top: 38px; }
+    .step-head { display:flex; align-items:flex-start; gap:12px; margin-bottom:16px; }
+    .step-n {
+      flex:none; width:30px; height:30px; border-radius:50%;
+      background: linear-gradient(135deg, var(--yellow), var(--orange));
+      color:#fff; display:grid; place-items:center; font-weight:800; font-size:15px; margin-top:3px;
+      box-shadow: var(--shadow);
+    }
+    .step-n.done { background: linear-gradient(135deg, #58b97c, var(--ok)); }
+    .step-n.dot  { background: var(--sky); color: var(--blue-deep); }
+    .step-head h2 { margin:0; font-size:22px; color:var(--brown); }
+    .step-head .sub { margin:2px 0 0; color:var(--ink-soft); font-size:15px; }
+
+    .opts { display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(270px,1fr)); }
+    .opt {
+      text-align:left; font-family:var(--font); font-size:15px; color:var(--ink); cursor:pointer;
+      background:var(--paper); border:2px solid var(--line); border-radius:var(--radius);
+      padding:18px 18px 18px 52px; position:relative; display:flex; flex-direction:column; gap:5px;
+      box-shadow:var(--shadow); transition:border-color .15s ease, background .15s ease, transform .1s ease;
+    }
+    .opt:hover { border-color: var(--brown-soft); transform: translateY(-2px); }
+    .opt .mark {
+      position:absolute; left:16px; top:20px; width:24px; height:24px; border-radius:50%;
+      border:2px solid var(--line); display:grid; place-items:center; transition:.15s;
+    }
+    .opt .mark svg { width:13px; height:13px; opacity:0; transition:.15s; }
+    .opt .t { font-weight:800; font-size:18px; color:var(--brown); }
+    .opt .d { color:var(--ink-soft); font-size:14.5px; line-height:1.55; }
+    .opt .p { font-weight:800; color:var(--terra); font-size:15px; }
+    .opt[aria-pressed="true"] { border-color: var(--orange); background:#fff7ec; }
+    .opt[aria-pressed="true"] .mark { background:var(--orange); border-color:var(--orange); }
+    .opt[aria-pressed="true"] .mark svg { opacity:1; }
+
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow); }
+    .base-card { border:2px solid var(--ok); }
+    .base-top { display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+    .base-top h3 { margin:0; font-size:20px; color:var(--brown); }
+    .base-top .amt { font-size:28px; font-weight:800; color:var(--ok); }
+    .inc { list-style:none; margin:0; padding:0; display:grid; gap:8px 20px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+    .inc li { display:flex; gap:9px; align-items:flex-start; font-size:15px; }
+    .inc li::before { content:"✓"; color:var(--ok); font-weight:800; flex:none; }
+
+    .stepper { display:inline-flex; align-items:center; background:var(--paper); border:2px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:var(--shadow); }
+    .stepper button { font-family:var(--font); border:0; background:none; cursor:pointer; width:48px; height:52px; font-size:24px; color:var(--brown); }
+    .stepper button:hover:not(:disabled) { background:#fff2dd; }
+    .stepper button:disabled { opacity:.3; cursor:not-allowed; }
+    .stepper .val { min-width:78px; text-align:center; font-weight:800; font-size:21px; color:var(--brown); border-left:1px solid var(--line); border-right:1px solid var(--line); height:52px; line-height:52px; }
+    .srow { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .srow .note { color:var(--ink-soft); font-size:14.5px; }
+
+    .fgroup { background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); margin-bottom:14px; }
+    .fgroup-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:14px 18px; background:#fff7ea; border-bottom:1px solid var(--line); }
+    .fgroup-head .lab { font-weight:800; color:var(--brown); font-size:17px; flex:1 1 190px; }
+    .fgroup-head .rate { font-weight:800; color:var(--terra); font-size:15px; white-space:nowrap; }
+    .fgroup-body { padding:14px 18px 17px; }
+    .fwhy { color:var(--ink-soft); font-size:14.5px; margin:0 0 12px; }
+    .fchips { display:flex; flex-wrap:wrap; gap:9px; }
+    .fchip {
+      font-family:var(--font); font-size:14.5px; color:var(--ink); cursor:pointer;
+      background:var(--cream); border:2px solid var(--line); border-radius:999px;
+      padding:8px 15px 8px 12px; display:inline-flex; align-items:center; gap:8px; transition:.15s;
+    }
+    .fchip:hover { border-color:var(--brown-soft); }
+    .fchip .dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--line); flex:none; display:grid; place-items:center; transition:.15s; }
+    .fchip .dot svg { width:9px; height:9px; opacity:0; transition:.15s; }
+    .fchip[aria-pressed="true"] { border-color:var(--orange); background:#fff2dd; color:var(--brown); font-weight:700; }
+    .fchip[aria-pressed="true"] .dot { background:var(--orange); border-color:var(--orange); }
+    .fchip[aria-pressed="true"] .dot svg { opacity:1; }
+
+    .sum { margin-top:40px; background:var(--paper); border:2px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+    .sum.on { border-color:var(--orange); }
+    .sum-head { padding:18px 22px; background:#fff7ea; border-bottom:1px solid var(--line); display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    .sum-head h2 { margin:0; font-size:21px; color:var(--brown); }
+    .sum-head .hint { color:var(--ink-soft); font-size:14.5px; }
+    .lines { padding:6px 22px 2px; }
+    .line { display:flex; justify-content:space-between; gap:16px; align-items:baseline; padding:11px 0; border-bottom:1px dashed var(--line); }
+    .line:last-child { border-bottom:0; }
+    .line .n { flex:1; font-size:15.5px; }
+    .line .n small { display:block; color:var(--ink-soft); font-size:13.5px; line-height:1.5; }
+    .line .v { font-weight:700; color:var(--brown); white-space:nowrap; }
+    .sum-total { padding:18px 22px; background:#fff2dd; border-top:1px solid #e7b44a; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+    .sum-total .lab { font-weight:800; color:var(--brown); font-size:18px; }
+    .sum-total .big { font-size:clamp(32px,7vw,44px); font-weight:800; color:var(--terra); line-height:1.1; }
+    .sum-act { padding:16px 22px 20px; display:flex; gap:10px; flex-wrap:wrap; }
+    .sum-empty { padding:32px 22px; text-align:center; color:var(--ink-soft); }
+
+    /* portfolio */
+    .works { display:grid; gap:18px; grid-template-columns:repeat(2,1fr); }
+    @media (max-width:640px){
+      .works { grid-template-columns:1fr; }
+      .work .thumb { aspect-ratio:3/1; font-size:38px; }
+      .nav .brand { font-size:17px; gap:8px; }
+      .nav .brand .logo { width:32px; height:32px; font-size:17px; }
+      .nav { padding:11px 14px; gap:10px; }
+      .nav a.plain { font-size:13px; }
+    }
+    .work {
+      font-family:var(--font); text-align:left; cursor:pointer; padding:0; overflow:hidden;
+      background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+      box-shadow:var(--shadow); display:flex; flex-direction:column; transition:transform .15s ease, box-shadow .15s ease;
+    }
+    .work:hover { transform:translateY(-4px); box-shadow:0 14px 30px rgba(122,82,48,.18); }
+    .work .thumb { aspect-ratio:5/2; display:grid; place-items:center; font-size:44px; }
+    .work .wbody { padding:15px 17px 17px; display:flex; flex-direction:column; gap:6px; flex:1; }
+    .work h3 { margin:0; font-size:17.5px; color:var(--brown); }
+    .work .w-what { color:var(--ink-soft); font-size:14px; line-height:1.55; }
+    .work .w-more { margin-top:auto; padding-top:10px; color:var(--blue); font-weight:700; font-size:14px; }
+
+    .ov { position:fixed; inset:0; z-index:90; background:rgba(58,47,39,.55); display:none; padding:20px; overflow-y:auto; }
+    .ov.open { display:block; }
+    .sheet { max-width:640px; margin:40px auto; background:var(--paper); border-radius:var(--radius); box-shadow:0 20px 60px rgba(58,47,39,.4); overflow:hidden; }
+    .sheet-head { padding:20px 22px; background:#fff7ea; border-bottom:1px solid var(--line); display:flex; gap:14px; align-items:flex-start; }
+    .sheet-head .ico { font-size:34px; line-height:1; }
+    .sheet-head h3 { margin:0 0 3px; font-size:20px; color:var(--brown); }
+    .sheet-head p { margin:0; color:var(--ink-soft); font-size:14.5px; }
+    .sheet-head .x { margin-left:auto; border:0; background:none; font-family:var(--font); font-size:26px; line-height:1; color:var(--ink-soft); cursor:pointer; padding:0 2px; }
+    .sheet-body { padding:18px 22px 22px; }
+    .sheet-body h4 { margin:0 0 10px; font-size:15px; color:var(--brown); }
+    .plist { list-style:none; margin:0 0 18px; padding:0; display:grid; gap:11px; }
+    .plist li { display:grid; gap:2px; padding-left:14px; border-left:3px solid var(--sky); }
+    .plist b { color:var(--ink); font-size:15px; }
+    .plist span { color:var(--ink-soft); font-size:14px; line-height:1.55; }
+
+    /* closing CTA */
+    .cta { margin-top:44px; background:linear-gradient(180deg,#fff9ee,var(--paper)); border:2px solid var(--orange); border-radius:var(--radius); padding:28px 24px; text-align:center; box-shadow:var(--shadow); }
+    .cta h2 { margin:0 0 8px; font-size:clamp(21px,4vw,27px); color:var(--brown); }
+    .cta p { margin:0 auto; max-width:46ch; color:var(--ink-soft); font-size:16px; }
+    .cta-steps { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); margin:22px auto 0; max-width:720px; text-align:left; }
+    .cta-step { background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:14px 16px; display:flex; gap:11px; align-items:flex-start; }
+    .cta-step .cn { flex:none; width:24px; height:24px; border-radius:50%; background:var(--sky); color:var(--blue-deep); display:grid; place-items:center; font-weight:800; font-size:13px; }
+    .cta-step b { display:block; color:var(--brown); font-size:15px; }
+    .cta-step span { color:var(--ink-soft); font-size:13.5px; line-height:1.5; }
+    .qr-box { margin:24px auto 0; display:inline-flex; flex-direction:column; align-items:center; gap:10px; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); padding:18px 22px; }
+    .qr-box img { width:168px; height:168px; border-radius:8px; }
+    .qr-box .cap { color:var(--ink-soft); font-size:14px; }
+
+    .stick { position:fixed; left:0; right:0; bottom:0; z-index:70; background:var(--paper); border-top:1px solid var(--line); box-shadow:0 -6px 24px rgba(122,82,48,.16); padding:11px 18px calc(11px + env(safe-area-inset-bottom,0px)); }
+    .stick-in { max-width:1040px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+    .stick .cap { display:block; color:var(--ink-soft); font-size:12px; font-weight:700; }
+    .stick .num { font-size:clamp(21px,5vw,28px); font-weight:800; color:var(--terra); line-height:1.15; }
+    .stick .num.idle { font-size:15px; color:var(--ink-soft); font-weight:700; }
+    .line-fab { bottom: 88px; }
+
+    .toast { position:fixed; left:50%; bottom:120px; transform:translateX(-50%) translateY(10px); z-index:100; background:var(--ink); color:#fff; padding:11px 22px; border-radius:999px; font-size:15px; font-weight:700; opacity:0; pointer-events:none; transition:.22s; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    :focus-visible { outline:3px solid var(--orange); outline-offset:2px; border-radius:8px; }
+    @media (prefers-reduced-motion: reduce) { * { transition:none !important; } html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a class="brand" href="/" style="color:var(--brown)"><span class="logo">🌿</span> BARNBARN</a>
+    <div style="display:flex;gap:18px;align-items:center">
+      <a class="plain" href="/#calendar">📅 ปฏิทินกิจกรรม</a>
+      <a class="plain" href="/my">📋 ดูการสมัครของฉัน</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <span class="leaf" style="left:8%;top:22px">🍃</span>
+    <span class="leaf" style="right:10%;top:64px">🌾</span>
+    <div class="badge">บ้าน-บ้าน สุขพอดี · รับทำเว็บ</div>
+    <h1>เลือกของที่อยากได้<br />แล้วราคาจะขึ้นเอง</h1>
+    <p>ไม่มีแพ็กเหมา ไม่มีราคาซ่อน — กดเลือกทีละอย่าง เห็นทันทีว่าจ่ายค่าอะไรบ้าง เริ่มต้น 2,000 บาท</p>
+    <div class="badges">
+      <span class="badge">✓ ไม่มีค่ารายเดือนบังคับ</span>
+      <span class="badge">✓ ไม่ต้องสมัคร AI เอง</span>
+      <span class="badge">✓ แก้เนื้อหาเองได้ผ่านหลังบ้าน</span>
+      <span class="badge">✓ ดูแลให้ฟรี 30 วัน</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- base -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n done">✓</span>
+        <div><h2>ทุกเว็บได้ของชุดนี้เสมอ</h2><p class="sub">ไม่ต้องเลือก รวมอยู่ในราคาเริ่มต้นแล้ว</p></div>
+      </div>
+      <div class="panel base-card">
+        <div class="base-top"><h3>ฐานของทุกเว็บ</h3><span class="amt">2,000 ฿</span></div>
+        <ul class="inc" id="incList"></ul>
+        <p class="muted" style="margin:14px 0 0;color:var(--ink-soft);font-size:14.5px">มากับ รูป 10 รูป · รายการสินค้า 15 รายการ · หน้าหลัก 1 หน้า</p>
+      </div>
+    </section>
+
+    <!-- 1 -->
+    <section class="step" id="s1">
+      <div class="step-head">
+        <span class="step-n">1</span>
+        <div><h2>หน้าตาเว็บ ใครออกแบบ</h2><p class="sub">เลือกข้อนี้ก่อน แล้วราคาจะเริ่มแสดง</p></div>
+      </div>
+      <div class="opts" id="designOpts"></div>
+    </section>
+
+    <!-- 2 -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n">2</span>
+        <div><h2>อยากมีหน้าย่อยกี่หน้า</h2><p class="sub">เช่น เกี่ยวกับเรา · บริการ · บทความ · คำถามที่พบบ่อย</p></div>
+      </div>
+      <div class="srow">
+        <div class="stepper">
+          <button type="button" id="pgMinus" aria-label="ลดจำนวนหน้าย่อย">−</button>
+          <span class="val" id="pgVal">0</span>
+          <button type="button" id="pgPlus" aria-label="เพิ่มจำนวนหน้าย่อย">+</button>
+        </div>
+        <span class="note" id="pgNote">หน้าละ 800 ฿</span>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n">3</span>
+        <div><h2>อยากได้ระบบอะไรเพิ่ม</h2><p class="sub">เลือกได้หลายอย่าง หรือไม่เลือกเลยก็ได้ — ราคาต่างกันตามความยากของงาน</p></div>
+      </div>
+      <div id="fnGroups"></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n">4</span>
+        <div><h2>ของที่ต้องใส่ลงเว็บ</h2><p class="sub">10 รูปแรกและ 15 รายการแรกรวมอยู่ในฐานแล้ว</p></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="srow">
+          <div class="stepper">
+            <button type="button" id="imgMinus" aria-label="ลดจำนวนรูป">−</button>
+            <span class="val" id="imgVal">10</span>
+            <button type="button" id="imgPlus" aria-label="เพิ่มจำนวนรูป">+</button>
+          </div>
+          <span class="note">จำนวนรูป · เกิน 10 รูป คิดเพิ่ม 300 ฿ ต่อ 10 รูป</span>
+        </div>
+        <div class="srow">
+          <div class="stepper">
+            <button type="button" id="itMinus" aria-label="ลดจำนวนรายการสินค้า">−</button>
+            <span class="val" id="itVal">15</span>
+            <button type="button" id="itPlus" aria-label="เพิ่มจำนวนรายการสินค้า">+</button>
+          </div>
+          <span class="note">รายการสินค้า/บริการ · เกิน 15 รายการ คิดเพิ่ม 400 ฿ ต่อ 15 รายการ</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- summary -->
+    <section class="sum" id="sum">
+      <div class="sum-head">
+        <h2>สรุปราคา</h2>
+        <span class="hint" id="sumHint">เลือกข้อ 1 ก่อน แล้วราคาจะขึ้นที่นี่</span>
+      </div>
+      <div class="sum-empty" id="sumEmpty">ยังไม่ได้เลือกว่าใครออกแบบหน้าตาเว็บ</div>
+      <div id="sumBody" hidden>
+        <div class="lines" id="sumLines"></div>
+        <div class="sum-total"><span class="lab">รวมทั้งหมด</span><span class="big" id="sumBig">0 ฿</span></div>
+        <div class="sum-act">
+          <button type="button" class="btn btn-primary" id="copyBtn">📋 คัดลอกใบเสนอราคา</button>
+          <a class="btn btn-green" href="https://lin.ee/TjK2193" target="_blank" rel="noopener">ส่งให้เราทางไลน์</a>
+          <button type="button" class="btn btn-ghost" id="resetBtn">เริ่มเลือกใหม่</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- portfolio -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n dot">★</span>
+        <div><h2>เว็บที่เราทำมาแล้ว</h2><p class="sub">กดที่การ์ดเพื่อดูว่าแต่ละเว็บมีหน้าอะไรบ้าง และแต่ละหน้าทำอะไร</p></div>
+      </div>
+      <div class="works" id="works"></div>
+    </section>
+
+    <!-- alt lane -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n dot">•</span>
+        <div><h2>ไม่อยากนั่งเลือกเอง?</h2><p class="sub">ส่งบรีฟมาก็ได้ เราตีราคาให้เป็นตัวเลขเดียว</p></div>
+      </div>
+      <div class="panel" style="border:2px solid var(--blue)">
+        <span class="tag">ทางเลือกที่ 2</span>
+        <h3 style="margin:8px 0 6px;color:var(--brown);font-size:19px">บอกมาว่าอยากได้เว็บแบบไหน แล้วเราคิดราคาให้ทั้งก้อน</h3>
+        <p style="margin:0;color:var(--ink-soft)">เขียนบรีฟมาสั้น ๆ ว่าเว็บนี้ทำอะไร ลูกค้าเป็นใคร อยากให้เขากดอะไร แล้วคุยกัน 30–45 นาที<br />เราส่งกลับเป็น<b style="color:var(--ink)">ตัวเลขเดียว พร้อมรายการว่าจะได้อะไรบ้าง รวมค่าออกแบบทุกหน้าแล้ว ไม่มีบวกทีหลัง</b></p>
+        <p style="margin:12px 0 0;font-size:26px;font-weight:800;color:var(--terra)">5,000 – 20,000 ฿</p>
+        <p style="margin:6px 0 0;color:var(--ink-soft);font-size:14.5px">งานที่ใหญ่กว่านี้เราจะเสนอเป็นเฟส ไม่คิดราคาเดียว เพื่อให้ทั้งสองฝ่ายเห็นผลงานก่อนไปต่อ</p>
+      </div>
+    </section>
+
+    <!-- no monthly -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n dot">•</span>
+        <div><h2>ไม่มีค่ารายเดือนบังคับ</h2><p class="sub">จ่ายครั้งเดียวก็ใช้เว็บได้ตลอด</p></div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+        <div class="panel"><span class="tag">ตอนทำ</span><h3 style="margin:8px 0 6px;color:var(--brown);font-size:18px">ไม่ต้องสมัคร AI เอง</h3><p style="margin:0;color:var(--ink-soft);font-size:15px">เราทำให้ด้วยบัญชีของเราเอง ลูกค้าไม่ต้องสมัคร ไม่ต้องจ่ายรายเดือน และไม่ต้องเรียนรู้อะไรเพิ่ม</p></div>
+        <div class="panel"><span class="tag">หลังส่งมอบ</span><h3 style="margin:8px 0 6px;color:var(--brown);font-size:18px">แก้เนื้อหาเองได้ ไม่ต้องจ่ายใคร</h3><p style="margin:0;color:var(--ink-soft);font-size:15px">ทุกเว็บมาพร้อมหลังบ้านให้ล็อกอินเข้าไปแก้ข้อความ เปลี่ยนรูป ตั้งรอบ และแก้ตัวเลขที่เหลือเองได้ ไม่ต้องใช้ AI ไม่ต้องแตะโค้ด</p></div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:16px">
+        <div class="panel"><span class="tag">390 ฿ / เดือน</span><h3 style="margin:8px 0 8px;color:var(--brown);font-size:18px">ดูแลให้อยู่รอด</h3><ul style="margin:0;padding-left:1.15em;color:var(--ink-soft);font-size:15px"><li>เฝ้าเว็บไม่ให้ล่ม ต่ออายุให้</li><li>แก้ข้อความหรือรูป 2 จุด/เดือน</li><li>ถามได้ในกลุ่มไลน์</li></ul></div>
+        <div class="panel"><span class="tag">890 ฿ / เดือน</span><h3 style="margin:8px 0 8px;color:var(--brown);font-size:18px">ดูแล + ต่อยอด</h3><ul style="margin:0;padding-left:1.15em;color:var(--ink-soft);font-size:15px"><li>แก้ได้ 6 จุด/เดือน</li><li>เพิ่มหน้าใหม่ 1 หน้า/เดือน</li><li>รายงานคนเข้าเว็บทุกสิ้นเดือน</li></ul></div>
+        <div class="panel"><span class="tag">1,900 ฿ / เดือน</span><h3 style="margin:8px 0 8px;color:var(--brown);font-size:18px">เราทำให้หมด</h3><ul style="margin:0;padding-left:1.15em;color:var(--ink-soft);font-size:15px"><li>อัปเดตสินค้า ราคา โปรโมชั่นให้</li><li>ดูแลระบบจอง/อีเมลอัตโนมัติ</li><li>แก้ตามสั่งไม่จำกัดจุดเล็ก</li></ul></div>
+      </div>
+      <p style="color:var(--ink-soft);font-size:14.5px;margin-top:14px">แพ็กรายเดือนเริ่มนับหลังครบ 30 วันที่ดูแลให้ฟรี · <b style="color:var(--ink)">ไม่สมัครก็ใช้เว็บต่อได้ตามปกติ</b></p>
+    </section>
+
+    <!-- terms -->
+    <section class="step">
+      <div class="step-head">
+        <span class="step-n dot">•</span>
+        <div><h2>ก่อนเริ่มงาน</h2><p class="sub">เขียนไว้ให้ชัดตั้งแต่ต้น จะได้ไม่ต้องมาเถียงกันกลางทาง</p></div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(290px,1fr))">
+        <div class="panel">
+          <h3 style="margin:0 0 10px;color:var(--brown);font-size:18px">ของที่ต้องส่งให้เรา</h3>
+          <ul style="margin:0;padding-left:1.15em;font-size:15px;line-height:1.75">
+            <li>ชื่อร้าน โลโก้ (ถ้ามี) เบอร์ ไลน์ พิกัดแผนที่</li>
+            <li>ข้อความแนะนำร้าน 5–10 บรรทัด</li>
+            <li>รายการสินค้า/บริการพร้อมราคา <b>เป็นไฟล์ข้อความ</b> ไม่ใช่รูปแคปหน้าจอ</li>
+            <li>รูปที่ใช้ได้จริง ไม่เบลอ ไม่มีลายน้ำของคนอื่น</li>
+            <li>อีเมลที่จะให้ฟอร์มส่งเข้า และคนที่รับผิดชอบตอบลูกค้า</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3 style="margin:0 0 10px;color:var(--brown);font-size:18px">วิธีทำงานและการจ่ายเงิน</h3>
+          <ul style="margin:0;padding-left:1.15em;font-size:15px;line-height:1.75">
+            <li><b>มัดจำ 50% ก่อนเริ่ม</b> ที่เหลือจ่ายวันส่งมอบ</li>
+            <li><b>แก้หน้าตาให้ 3 ครั้ง</b> นับรวมทุกหน้า (1 ครั้ง = รวบมาทีเดียว)</li>
+            <li><b>นับวันส่งมอบจากวันที่ได้ของครบ</b> ไม่ใช่วันจ่ายมัดจำ</li>
+            <li>เปลี่ยนโครงหลังอนุมัติแบบแล้ว คิดเป็นงานใหม่</li>
+            <li>ค่าโดเมนและค่าโฮสต์แบบไม่หลับ จ่ายตามจริง</li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;border-left:5px solid var(--yellow)">
+        <b style="color:var(--brown)">ดูแลให้ 30 วัน หมายถึงอะไร</b>
+        <p style="margin:6px 0 0;color:var(--ink-soft);font-size:15px">แก้บั๊คที่เกิดจากงานเรา และตอบคำถามวิธีใช้ — ส่วนการแก้เนื้อหาหรือเพิ่มของใหม่ ลูกค้าทำเองได้ผ่านหลังบ้านที่ให้ไปแล้ว หรือให้เราดูแลต่อเป็นรายเดือนก็ได้</p>
+      </div>
+    </section>
+
+    <!-- closing CTA -->
+    <section class="cta" id="contact">
+      <h2>เลือกเสร็จแล้ว ทักมาได้เลย</h2>
+      <p>ไม่ต้องกรอกฟอร์ม ไม่ต้องรอใบเสนอราคาทางอีเมล — กดคัดลอกแล้วส่งมาทางไลน์ เราตอบกลับพร้อมวันที่ทำได้</p>
+      <div class="cta-steps">
+        <div class="cta-step"><span class="cn">1</span><div><b>กดคัดลอกใบเสนอราคา</b><span>ปุ่มอยู่ในกล่องสรุปราคาด้านบน</span></div></div>
+        <div class="cta-step"><span class="cn">2</span><div><b>แอดไลน์แล้ววางลงไป</b><span>สแกน QR ข้างล่าง หรือกดปุ่มเขียว</span></div></div>
+        <div class="cta-step"><span class="cn">3</span><div><b>เราตอบกลับภายใน 1 วันทำการ</b><span>พร้อมบอกว่าเริ่มได้เมื่อไหร่ เสร็จเมื่อไหร่</span></div></div>
+      </div>
+      <div class="qr-box">
+        <img id="qrImg" alt="QR แอดไลน์ บ้าน-บ้าน สุขพอดี" />
+        <span class="cap">สแกนเพื่อแอดไลน์ · หรือกดปุ่มข้างล่าง</span>
+        <a class="line-btn" href="https://lin.ee/TjK2193" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.5c-5.24 0-9.5 3.44-9.5 7.68 0 3.8 3.38 6.98 7.94 7.58.31.06.73.2.84.46.1.24.06.6.03.84l-.13.82c-.04.24-.19.95.83.52 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.52 2.04-3.07 2.04-4.79C21.5 6.94 17.24 3.5 12 3.5z"/></svg>
+          เพิ่มเพื่อน LINE Official
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <div class="footer">
+    <div class="fline">🌿 บ้าน-บ้าน สุขพอดี · วิสาหกิจเพื่อสังคม · ต.โพรงอากาศ อ.บางน้ำเปรี้ยว จ.ฉะเชิงเทรา</div>
+    <div class="fline" style="font-size:13px">ราคาบนหน้านี้เป็นราคาตั้งต้น งานที่มีเงื่อนไขพิเศษเราจะแจ้งก่อนเริ่มเสมอ</div>
+    <div style="margin-top:10px"><a class="plain" href="/privacy.html" style="font-size:13px">นโยบายความเป็นส่วนตัว (PDPA)</a></div>
+  </div>
+
+  <a class="line-fab" href="https://lin.ee/TjK2193" target="_blank" rel="noopener" aria-label="เพิ่มเพื่อน LINE Official">
+    <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.5c-5.24 0-9.5 3.44-9.5 7.68 0 3.8 3.38 6.98 7.94 7.58.31.06.73.2.84.46.1.24.06.6.03.84l-.13.82c-.04.24-.19.95.83.52 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.52 2.04-3.07 2.04-4.79C21.5 6.94 17.24 3.5 12 3.5z"/></svg>
+    <span class="lbl">แอดไลน์</span>
+  </a>
+
+  <div class="stick">
+    <div class="stick-in">
+      <div>
+        <span class="cap" id="stkCap">ราคาโดยประมาณ</span>
+        <span class="num idle" id="stkNum">เลือกข้อ 1 เพื่อดูราคา</span>
+      </div>
+      <button type="button" class="btn btn-primary" id="stkBtn">ดูสรุป</button>
+    </div>
+  </div>
+
+  <div class="ov" id="ov" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+    <div class="sheet" id="sheet">
+      <div class="sheet-head">
+        <span class="ico" id="ovIco">🌿</span>
+        <div><h3 id="ovTitle">—</h3><p id="ovWhat">—</p></div>
+        <button type="button" class="x" id="ovX" aria-label="ปิด">×</button>
+      </div>
+      <div class="sheet-body">
+        <h4>หน้าในเว็บนี้ และแต่ละหน้าทำอะไร</h4>
+        <ul class="plist" id="ovPages"></ul>
+        <a class="btn btn-blue" id="ovLink" href="#" target="_blank" rel="noopener">เปิดเว็บจริง ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">คัดลอกแล้ว</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var P = { base:2000, design:2000, page:800, pageDesign:1000, f:{1:750,2:1000,3:1250}, img:300, item:400 };
+
+  var INCLUDED = [
+    "หน้าหลัก 1 หน้า เปิดสวยบนมือถือ",
+    "หลังบ้าน ล็อกอินแก้ข้อความและรูปเอง",
+    "ฟอร์มสั่งซื้อ/ติดต่อ ถึงเราจริง",
+    "ปฏิทินรอบหรือวันเปิด ตั้งค่าเองได้",
+    "โชว์ที่นั่งเหลือ หรือสินค้าเหลือ",
+    "QR พร้อมเพย์ และ QR ไลน์",
+    "โหลดข้อมูลออกเป็น Excel",
+    "ดูแลให้ 30 วันหลังส่งมอบ"
+  ];
+
+  var FN = [
+    { tier:1, label:"ระบบแสดงผลและกรอง", why:"เว็บแค่ต้องแสดงของให้ถูก ไม่ต้องจำสถานะอะไร",
+      items:["กรองสินค้าตามหมวด","แคตตาล็อกแบบไม่โชว์ราคา","สมัครหลายคนในใบเดียว","สองภาษา + ปรับขนาดตัวอักษร","ปุ่มลงปฏิทินมือถือ + นับถอยหลัง","หน้า “ดูรายการของฉัน” ค้นด้วยเบอร์","แกลเลอรีรูป แยกอัลบั้ม","รีวิวลูกค้า แอดมินกรอกเอง"] },
+    { tier:2, label:"ระบบที่มีสถานะและการยืนยัน", why:"ของหนึ่งชิ้นเปลี่ยนสถานะได้ หรือระบบต้องส่งอะไรออกไปข้างนอก",
+      items:["ที่นั่ง/สินค้าเหลือ ลดเองเมื่อมีคนจอง","แนบสลิป + แอดมินกดยืนยัน","อีเมลยืนยันอัตโนมัติ","คิวสำรองเมื่อมีคนสละสิทธิ์","สมัครเป็นผู้ขาย/พาร์ทเนอร์ รออนุมัติ","ตะกร้า + เลือกวันมารับ","ออกเกียรติบัตรอัตโนมัติ","แจ้งเตือนเข้าไลน์เมื่อมีออเดอร์","ลูกค้ายกเลิก/เลื่อนรอบเองได้"] },
+    { tier:3, label:"ระบบที่ข้ามเวลา ข้ามอุปกรณ์ ข้ามระบบ", why:"ต้องมีอุปกรณ์อื่น เวลาอื่น หรือระบบของคนอื่นเข้ามาเกี่ยว",
+      items:["เช็คอิน QR หน้างาน","ตัดสต๊อกจริง กันขายเกิน","แจ้งเตือนอัตโนมัติก่อนถึงวัน","ตัดบัตรผ่านผู้ให้บริการชำระเงิน","เชื่อมกับระบบบัญชี/สต๊อกที่มีอยู่","ระบบสมาชิก + ประวัติการสั่งซื้อ","ตรวจสลิปอัตโนมัติ จับคู่ยอดให้","รายงานยอดขายส่งเข้าไลน์อัตโนมัติ","แต้มสะสม / คูปองส่วนลด","หลายสาขา แยกสิทธิ์เข้าถึง","ผังที่นั่ง/โต๊ะจริง ให้เลือกตำแหน่ง","หน้าจอครัว/หน้าร้าน อัปเดตสด"] }
+  ];
+
+  var WORKS = [
+    { ico:"🌿", bg:"linear-gradient(135deg,#d9edf7,#fff3d6)", name:"BARNBARN Workshop",
+      what:"เว็บรับสมัครเวิร์กช็อปของบ้าน-บ้านเอง — สมัคร จ่าย ยืนยัน จบในเว็บเดียว",
+      url:"https://barnbarn-workshop.onrender.com",
+      pages:[
+        ["หน้าแรก","การ์ดเวิร์กช็อปทุกรอบที่เปิดรับ พร้อมปฏิทินรายเดือน แตะวันที่มีกิจกรรมแล้วเด้งไปหน้าสมัครทันที"],
+        ["หน้าสมัคร","ฟอร์ม 3 สเต็ป กรอกผู้แทน สมาชิกในกลุ่ม และข้อมูลที่ต้องรู้ก่อนวันงาน แนบสลิปได้ในหน้าเดียว"],
+        ["ดูการสมัครของฉัน","ลูกค้าค้นด้วยเบอร์โทรอย่างเดียว ไม่ต้องสมัครสมาชิก ไม่ต้องจำรหัส"],
+        ["หลังบ้านแอดมิน","ตารางรายชื่อทั้งหมด กดยืนยันสลิป แก้รอบ และโหลดออกเป็น Excel ไปทำต่อได้"],
+        ["ที่นั่งเหลือ","ตัวเลขลดเองทุกครั้งที่มีคนจองสำเร็จ กันรับเกินโดยไม่ต้องนั่งนับ"]
+      ] },
+    { ico:"🥬", bg:"linear-gradient(135deg,#eaf6e2,#fff3d6)", name:"ตลาดคุณปู่ @หนองจอก",
+      what:"เว็บตลาดสีเขียวกลางทุ่งนา คลอง 14 — บอกวันเปิด รวมร้านค้า และรับสมัครผู้ขาย",
+      url:"https://taladkhunpoo.onrender.com",
+      pages:[
+        ["หน้าแรก","วันเปิดตลาดรอบถัดไปตัวใหญ่กลางจอ เห็นปุ๊บรู้ปั๊บว่าต้องมาวันไหน"],
+        ["รู้จักตลาด","เล่าที่มาและบรรยากาศ พร้อมสองภาษาสำหรับคนต่างชาติที่แวะมา"],
+        ["ปฏิทินรอบตลาด","รอบที่เปิดทั้งปี ดูล่วงหน้าได้ วางแผนมาเที่ยวได้"],
+        ["แกลเลอรีรูป","รูปบรรยากาศแยกอัลบั้ม ให้คนที่ยังไม่เคยมาเห็นภาพก่อนตัดสินใจ"],
+        ["ร้านในตลาด","รวมร้านค้าที่มาออก คนหาของเฉพาะอย่างจะได้รู้ว่ามีไหม"],
+        ["สมัครเป็นผู้ขาย","พ่อค้าแม่ค้ากรอกสมัครเข้ามา แอดมินกดอนุมัติในหลังบ้าน"],
+        ["เส้นทางมาตลาด","แผนที่และวิธีเดินทาง เพราะตลาดอยู่นอกเมือง"]
+      ] },
+    { ico:"🌳", bg:"linear-gradient(135deg,#e2f0e6,#d9edf7)", name:"Always Trees",
+      what:"เว็บรับออกแบบและจัดสวน — มีเครื่องมือให้ลูกค้าลองจัดสวนเองก่อนตัดสินใจจ้าง",
+      url:"https://alwaystrees.onrender.com",
+      pages:[
+        ["หน้าแรก","บริการที่รับทำ ผลงานที่ผ่านมา และช่องทางติดต่อ จบในหน้าเดียว"],
+        ["แคตตาล็อกต้นไม้","ค้นและกรองต้นไม้ตามชนิดและการใช้งาน ลูกค้าเลือกได้เองว่าชอบต้นไหน"],
+        ["ลองจัดสวนหน้ากำแพงเอง","เครื่องมือให้ลากต้นไม้มาวางบนกำแพงจำลอง เห็นภาพก่อนจ้างจริง — ตัวนี้คือเหตุผลที่คนทักเข้ามา"],
+        ["หลังบ้าน","เจ้าของเพิ่มหรือแก้ข้อมูลต้นไม้เองได้ ไม่ต้องเรียกช่างเว็บทุกครั้งที่มีของใหม่"]
+      ] },
+    { ico:"🍽️", bg:"linear-gradient(135deg,#fff3d6,#fde3d0)", name:"Seed Restaurant POS",
+      what:"ระบบขายหน้าร้านที่ทำเป็นเว็บ ใช้บนแท็บเล็ตหรือมือถือ ไม่ต้องซื้อเครื่อง POS",
+      url:"https://seed-restaurant-cafe.onrender.com",
+      pages:[
+        ["หน้าขาย","กดเมนู ออกบิล คิดเงิน ใช้ได้ทั้งบนแท็บเล็ตและมือถือ"],
+        ["ป้ายเลขคิว","จอแสดงเลขคิวให้ลูกค้าดูเอง ไม่ต้องตะโกนเรียก"],
+        ["จอครัวและบาร์","ออเดอร์เด้งขึ้นจอหลังร้านทันทีที่กดสั่ง อัปเดตสดไม่ต้องรีเฟรช"],
+        ["สต๊อกและเมนู","แก้เมนู ราคา และของที่หมดได้เอง ไม่ต้องแตะโค้ด"],
+        ["สรุปยอดขาย","ดูยอดรายวัน และโหลดออกไปทำบัญชีต่อได้"],
+        ["QR รับเงินและตรวจสลิป","ลูกค้าสแกนจ่าย แล้วระบบช่วยเช็กสลิปให้"]
+      ] }
+  ];
+
+  var state = { design:null, pages:0, img:10, items:15, picked:{} };
+  var $ = function(id){ return document.getElementById(id); };
+  var fmt = function(n){ return Number(n).toLocaleString("en-US") + " ฿"; };
+  var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+  var CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+  $("qrImg").src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ4AAAEOAQAAAABQysQIAAABzklEQVR4nO2aQYrcMBBF348FvZRhDpCjqG+WM+UG9lHmAA3SMmBTWZTstBfDwJj02EZaCMl+i09RyL9KlvHJmH98RkBDPhg2bFZmNmFDnJancTqS3JMh2BDNPKZmZiRf1a0NLbo7kVlSD1Akxh7qJOnlWq6LjD3YUG72MfIyLddAwvMmPnwr4ndouR4SgM6A2fciPmQwQ7IXa7kkUiRJNYndQow9SJJ0P5zcMyFhTdF1dKaUWZ82v/t1pDqyanC76sgGf9c1R7YbKRKUm5Ey+IpoZgOgX/locs+EPNUQECdPZVIGs+yl25HkngzBLHdmA51n7FKrmUGcILXo7kA2lXAGz+KUqVPrM+xBsIEld1PurJ4M3mLwVD6S3JMhgWSzfCJOa5k2B0DYK7VcFyk3NwmkPAtKwIN9P6bckyAsH7Ta1a3T+rZ5hj1IbeMuvdzFQsR67rbo7kRG1VELCR+zvkPLBZHFkbkFG3/+Ed43K5LUH03umZCA+4P4gPHeofQegPIvdQ8l92TIckMZny7SlpKiVsdHknsyZHM34S43YKPAKG+mNLQO5NeRzd1E6SH9fpuUbA4C2q3lPmTzP4P3HbtaCVs7GfYiav/i/EfkL9hWLFN83NJhAAAAAElFTkSuQmCC";
+
+  $("incList").innerHTML = INCLUDED.map(function(t){ return "<li><span>" + esc(t) + "</span></li>"; }).join("");
+
+  var DESIGN = [
+    { k:"own", t:"ส่งแบบมาเอง", d:"มีไฟล์ Canva ภาพร่าง หรือชี้เว็บตัวอย่างที่ชอบมาให้ เราทำตามนั้น", p:"ไม่มีค่าใช้จ่ายเพิ่ม" },
+    { k:"us",  t:"ให้เราออกแบบให้", d:"เราคิดสี จัดวาง เลือกฟอนต์ให้ทั้งหมด และแก้ให้ 3 ครั้ง", p:"+2,000 ฿ สำหรับหน้าหลัก" }
+  ];
+  $("designOpts").innerHTML = DESIGN.map(function(o){
+    return '<button type="button" class="opt" data-k="' + o.k + '" aria-pressed="false">' +
+      '<span class="mark">' + CHECK + '</span><span class="t">' + o.t + '</span>' +
+      '<span class="d">' + o.d + '</span><span class="p">' + o.p + '</span></button>';
+  }).join("");
+
+  $("fnGroups").innerHTML = FN.map(function(g){
+    return '<div class="fgroup"><div class="fgroup-head">' +
+      '<span class="lab">' + g.label + '</span>' +
+      '<span class="rate">อย่างละ ' + Number(P.f[g.tier]).toLocaleString("en-US") + ' ฿</span>' +
+      '</div><div class="fgroup-body"><p class="fwhy">' + g.why + '</p><div class="fchips">' +
+      g.items.map(function(it,i){
+        return '<button type="button" class="fchip" data-t="' + g.tier + '" data-i="' + i + '" aria-pressed="false">' +
+          '<span class="dot">' + CHECK + '</span>' + it + '</button>';
+      }).join("") + "</div></div></div>";
+  }).join("");
+
+  $("works").innerHTML = WORKS.map(function(w,i){
+    return '<button type="button" class="work" data-w="' + i + '">' +
+      '<span class="thumb" style="background:' + w.bg + '">' + w.ico + '</span>' +
+      '<span class="wbody"><h3>' + esc(w.name) + '</h3>' +
+      '<span class="w-what">' + esc(w.what) + '</span>' +
+      '<span class="w-more">ดูหน้าในเว็บนี้ (' + w.pages.length + ' หน้า) →</span></span></button>';
+  }).join("");
+
+  function calc(){
+    var lines = [], total = P.base;
+    lines.push({ n:"ฐานของทุกเว็บ", s:"หน้าหลัก · หลังบ้าน · ฟอร์ม · ปฏิทิน · ตัวเลขที่เหลือ · QR · Excel · ดูแล 30 วัน", v:P.base });
+    if (state.design === "us"){ total += P.design; lines.push({ n:"ออกแบบหน้าตาหน้าหลัก", s:"แก้ให้ 3 ครั้ง นับรวมทุกหน้า", v:P.design }); }
+    if (state.pages > 0){
+      var per = P.page + (state.design === "us" ? P.pageDesign : 0);
+      var amt = per * state.pages;
+      total += amt;
+      lines.push({ n:"หน้าย่อย " + state.pages + " หน้า", s:(state.design === "us" ? "หน้าละ 1,800 ฿ (ทำหน้า 800 + ออกแบบ 1,000)" : "หน้าละ 800 ฿ — ส่งแบบมาเอง"), v:amt });
+    }
+    [1,2,3].forEach(function(t){
+      var picks = Object.keys(state.picked).filter(function(k){ return k.indexOf(t + ":") === 0; });
+      if (!picks.length) return;
+      var amt = picks.length * P.f[t];
+      total += amt;
+      var names = picks.map(function(k){ return FN[t-1].items[+k.split(":")[1]]; });
+      lines.push({ n:"ระบบเพิ่ม " + picks.length + " อย่าง", s:names.join(" · "), v:amt });
+    });
+    var ix = Math.max(0, Math.ceil((state.img - 10) / 10));
+    if (ix > 0){ var ia = ix * P.img; total += ia; lines.push({ n:"รูปเพิ่ม (รวม " + state.img + " รูป)", s:"เกิน 10 รูปแรก คิด 300 ฿ ต่อ 10 รูป", v:ia }); }
+    var tx = Math.max(0, Math.ceil((state.items - 15) / 15));
+    if (tx > 0){ var ta = tx * P.item; total += ta; lines.push({ n:"รายการสินค้าเพิ่ม (รวม " + state.items + " รายการ)", s:"เกิน 15 รายการแรก คิด 400 ฿ ต่อ 15 รายการ", v:ta }); }
+    return { lines:lines, total:total };
+  }
+
+  function render(){
+    Array.prototype.forEach.call(document.querySelectorAll("#designOpts .opt"), function(b){
+      b.setAttribute("aria-pressed", String(state.design === b.getAttribute("data-k")));
+    });
+    $("pgVal").textContent = state.pages;
+    $("pgMinus").disabled = state.pages <= 0;
+    $("pgPlus").disabled = state.pages >= 8;
+    $("pgNote").textContent = state.design === "us"
+      ? "หน้าละ 1,800 ฿ (ทำหน้า 800 + ออกแบบ 1,000)"
+      : "หน้าละ 800 ฿ · ถ้าให้เราออกแบบด้วยจะเป็น 1,800 ฿";
+    $("imgVal").textContent = state.img;
+    $("imgMinus").disabled = state.img <= 10;
+    $("imgPlus").disabled = state.img >= 120;
+    $("itVal").textContent = state.items;
+    $("itMinus").disabled = state.items <= 15;
+    $("itPlus").disabled = state.items >= 150;
+    Array.prototype.forEach.call(document.querySelectorAll(".fchip"), function(b){
+      b.setAttribute("aria-pressed", String(!!state.picked[b.getAttribute("data-t") + ":" + b.getAttribute("data-i")]));
+    });
+
+    var r = calc(), ready = state.design !== null;
+    $("sumEmpty").hidden = ready;
+    $("sumBody").hidden = !ready;
+    $("sum").className = "sum" + (ready ? " on" : "");
+    $("sumHint").textContent = ready ? "กดเลือกเพิ่มหรือเอาออกได้ตลอด ราคาจะขยับเอง" : "เลือกข้อ 1 ก่อน แล้วราคาจะขึ้นที่นี่";
+
+    if (ready){
+      $("sumLines").innerHTML = r.lines.map(function(l){
+        return '<div class="line"><span class="n">' + esc(l.n) + "<small>" + esc(l.s) + "</small></span>" +
+               '<span class="v">' + fmt(l.v) + "</span></div>";
+      }).join("");
+      $("sumBig").textContent = fmt(r.total);
+      $("stkNum").textContent = fmt(r.total);
+      $("stkNum").className = "num";
+      $("stkCap").textContent = "ราคารวมโดยประมาณ";
+    } else {
+      $("stkNum").textContent = "เลือกข้อ 1 เพื่อดูราคา";
+      $("stkNum").className = "num idle";
+      $("stkCap").textContent = "ราคาโดยประมาณ";
+    }
+  }
+
+  $("designOpts").addEventListener("click", function(e){
+    var b = e.target.closest(".opt"); if (!b) return;
+    state.design = b.getAttribute("data-k"); render();
+  });
+  $("fnGroups").addEventListener("click", function(e){
+    var b = e.target.closest(".fchip"); if (!b) return;
+    var key = b.getAttribute("data-t") + ":" + b.getAttribute("data-i");
+    if (state.picked[key]) delete state.picked[key]; else state.picked[key] = 1;
+    render();
+  });
+  function bump(id, field, step, min, max){
+    $(id).addEventListener("click", function(){
+      state[field] = Math.min(max, Math.max(min, state[field] + step));
+      render();
+    });
+  }
+  bump("pgPlus","pages",1,0,8);  bump("pgMinus","pages",-1,0,8);
+  bump("imgPlus","img",10,10,120); bump("imgMinus","img",-10,10,120);
+  bump("itPlus","items",15,15,150); bump("itMinus","items",-15,15,150);
+
+  $("resetBtn").addEventListener("click", function(){
+    state = { design:null, pages:0, img:10, items:15, picked:{} };
+    render();
+    $("s1").scrollIntoView({ block:"start" });
+  });
+  $("stkBtn").addEventListener("click", function(){ $("sum").scrollIntoView({ block:"center" }); });
+
+  var toastT;
+  function toast(msg){
+    var el = $("toast"); el.textContent = msg; el.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function(){ el.classList.remove("show"); }, 2000);
+  }
+
+  $("copyBtn").addEventListener("click", function(){
+    var r = calc();
+    var txt = "ใบเสนอราคา — รับทำเว็บ บ้าน-บ้าน สุขพอดี\n\n";
+    r.lines.forEach(function(l){ txt += "• " + l.n + " — " + fmt(l.v) + "\n  " + l.s + "\n"; });
+    txt += "\nรวมทั้งหมด " + fmt(r.total) +
+      "\n\nไม่มีค่ารายเดือนบังคับ และไม่ต้องสมัคร AI เอง เราทำให้ด้วยบัญชีของเราเอง" +
+      "\nดูแลให้ฟรี 30 วันหลังส่งมอบ · มัดจำ 50% ก่อนเริ่ม" +
+      "\nแก้หน้าตาให้ 3 ครั้ง นับรวมทุกหน้า";
+    function ok(){ toast("คัดลอกแล้ว วางในไลน์ได้เลย"); }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(ok, function(){ legacy(txt, ok); });
+    } else { legacy(txt, ok); }
+  });
+  function legacy(txt, ok){
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = txt; ta.setAttribute("readonly","");
+      ta.style.position = "fixed"; ta.style.top = "-1000px";
+      document.body.appendChild(ta); ta.select();
+      var done = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (done) ok(); else toast("คัดลอกไม่สำเร็จ ลองกดค้างแล้วคัดลอกเอง");
+    } catch (err) { toast("คัดลอกไม่สำเร็จ ลองกดค้างแล้วคัดลอกเอง"); }
+  }
+
+  // portfolio modal
+  var lastFocus = null;
+  function openWork(i){
+    var w = WORKS[i];
+    lastFocus = document.activeElement;
+    $("ovIco").textContent = w.ico;
+    $("ovTitle").textContent = w.name;
+    $("ovWhat").textContent = w.what;
+    $("ovPages").innerHTML = w.pages.map(function(p){
+      return "<li><b>" + esc(p[0]) + "</b><span>" + esc(p[1]) + "</span></li>";
+    }).join("");
+    $("ovLink").href = w.url;
+    $("ov").classList.add("open");
+    document.body.style.overflow = "hidden";
+    $("ovX").focus();
+  }
+  function closeWork(){
+    $("ov").classList.remove("open");
+    document.body.style.overflow = "";
+    if (lastFocus) lastFocus.focus();
+  }
+  $("works").addEventListener("click", function(e){
+    var b = e.target.closest(".work"); if (!b) return;
+    openWork(+b.getAttribute("data-w"));
+  });
+  $("ovX").addEventListener("click", closeWork);
+  $("ov").addEventListener("click", function(e){ if (e.target === $("ov")) closeWork(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && $("ov").classList.contains("open")) closeWork(); });
+
+  render();
+})();
+</script>
+</body>
+</html>
