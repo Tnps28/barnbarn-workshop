@@ -21,20 +21,25 @@ const tlv = (id, v) => id + pad2(v.length) + v;
 function crc16(s) { let c = 0xFFFF; for (let i = 0; i < s.length; i++) { c ^= s.charCodeAt(i) << 8; for (let j = 0; j < 8; j++) c = (c & 0x8000) ? ((c << 1) ^ 0x1021) : (c << 1); c &= 0xFFFF; } return c.toString(16).toUpperCase().padStart(4, '0'); }
 export function ppPayload(id, amt) {
   const t = String(id || '').replace(/\D/g, '');
+  if (t.length < 9) return '';          // ยังไม่ได้ตั้งเลขพร้อมเพย์ — อย่าสร้าง QR มั่ว
   const acc = t.length >= 13 ? tlv('02', t) : tlv('01', ('0000000000000' + '66' + t.replace(/^0/, '')).slice(-13));
   const a = Number(amt);
   const p = tlv('00', '01') + tlv('01', a > 0 ? '12' : '11') + tlv('29', tlv('00', 'A000000677010111') + acc)
     + tlv('58', 'TH') + tlv('53', '764') + (a > 0 ? tlv('54', a.toFixed(2)) : '') + '6304';
   return p + crc16(p);
 }
-export function drawQR(el, text) {
+export function drawQR(el, text, box = 280) {
   // ใช้ qrcode-generator (MIT) ที่เก็บไว้ใน /vendor — ไม่ต้องพึ่ง CDN
   el.innerHTML = '';
+  if (!text) { el.innerHTML = '<span class="hint">ยังไม่ได้ตั้งค่า QR</span>'; return; }
   if (!window.qrcode) { el.innerHTML = '<span class="hint">โหลด QR ไม่สำเร็จ</span>'; return; }
   const q = window.qrcode(0, 'M'); q.addData(text); q.make();
-  const img = new Image(); img.alt = 'QR code'; img.width = 168; img.height = 168;
+  // ต้องเว้นขอบขาวรอบ QR 4 ช่องตามมาตรฐาน ไม่งั้นกล้องจับไม่ติด
+  // และต้องปล่อยให้รูปแสดงตามขนาดจริง ห้ามบังคับย่อ ไม่งั้นขอบช่องเบลอจนสแกนไม่ออก
+  const cell = Math.max(5, Math.floor(box / (q.getModuleCount() + 8)));
+  const img = new Image(); img.alt = 'QR code';
   img.style.imageRendering = 'pixelated';
-  img.src = q.createDataURL(6, 0);
+  img.src = q.createDataURL(cell, cell * 4);
   el.appendChild(img);
 }
 

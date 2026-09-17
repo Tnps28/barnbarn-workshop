@@ -72,7 +72,9 @@ function countdown() {
 // ---------------------------------------------------------------- ส่วนประกอบ
 function render() {
   $('#mast').innerHTML = header(P.settings, P.live);
-  const tabs = [['book', 'จองล่วงหน้า'], ['walk', 'รับบัตรคิว'], ['my', 'นัดของฉัน']];
+  const bookOn = P.settings.bookingOn !== false;
+  if (!bookOn && U.tab === 'book') U.tab = 'walk';
+  const tabs = [...(bookOn ? [['book', 'จองล่วงหน้า']] : []), ['walk', 'รับบัตรคิว'], ['my', 'นัดของฉัน']];
   $('#app').innerHTML = `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button class="seg-b ${U.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" role="tab" aria-selected="${U.tab === k}">${l}</button>`).join('')}</div>`
     + (U.tab === 'book' ? (U.booking ? rBooked() : rBook()) : U.tab === 'walk' ? rWalk() : rMy());
   document.querySelectorAll('[data-qr]').forEach((el) => drawQR(el, ppPayload(P.settings.pp, el.dataset.amt)));

@@ -108,6 +108,7 @@ function render() {
       <div><label for="st-hold">กันคิวรอโอน (นาที)</label><input id="st-hold" name="holdMin" type="number" min="5" max="180" value="${s.holdMin}"></div>
     </div>
     <label>วันหยุดประจำ</label><div class="days-pick">${DAYN.map((d, i) => `<label><input type="checkbox" name="closed" value="${i}" ${s.closedDays.includes(i) ? 'checked' : ''}> ${d}</label>`).join('')}</div>
+    <label class="check"><input type="checkbox" name="bookingOn" ${s.bookingOn !== false ? 'checked' : ''}> เปิดรับจองล่วงหน้า <small class="hint">(ติ๊กออก = หน้าเว็บเหลือแค่รับบัตรคิวหน้าร้าน)</small></label>
     <label class="check"><input type="checkbox" name="notifyOwner" ${s.notifyOwner ? 'checked' : ''}> แจ้งพี่หนึ่งทาง LINE เมื่อมีนัดใหม่หรือสลิปใหม่</label>
     <label class="check"><input type="checkbox" name="autoRemind" ${s.autoRemind ? 'checked' : ''}> เตือนลูกค้านัดพรุ่งนี้อัตโนมัติ (หลัง 18:00)</label>
     <p class="hint">LINE OA: ${D.line.on ? 'อัตโนมัติ ✓ ' + esc(D.line.oaId || '') : 'กดส่งเอง'} · บัญชีพี่หนึ่ง: ${s.ownerLinked ? 'ผูกแล้ว' : D.line.ownerCodeSet ? 'ยังไม่ผูก — ใช้ LINE ส่วนตัวของพี่หนึ่งทักแชท OA ว่า "ผูกหมอนวด รหัสลับ"' : 'ยังไม่ได้ตั้ง NUAD_OWNER_CODE'}</p>
@@ -162,7 +163,7 @@ async function saveSettings(e) {
   const f = new FormData(e.target), body = {};
   for (const k of ['shopName', 'name', 'place', 'pp', 'open', 'close', 'breakStart', 'breakEnd', 'slotMin', 'holdMin']) body[k] = f.get(k);
   body.closedDays = f.getAll('closed').map(Number);
-  body.notifyOwner = f.has('notifyOwner'); body.autoRemind = f.has('autoRemind');
+  body.notifyOwner = f.has('notifyOwner'); body.autoRemind = f.has('autoRemind'); body.bookingOn = f.has('bookingOn');
   try { await adm('/api/nuad/admin/settings', { method: 'PUT', body: JSON.stringify(body) }); toast('บันทึกแล้ว'); await load(); } catch (er) { toast(er.message); }
 }
 
