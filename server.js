@@ -13,6 +13,7 @@ import {
   getChargeStatus,
   paymentConfigured
 } from './services/payment.js';
+import * as LINE from './services/line.js';
 import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
 import { sendConfirmationEmail, emailConfigured, sendOtpEmail } from './services/email.js';
 import { mountNuad } from './nuad/routes.js';
@@ -32,6 +33,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'barnbarn2026';
 const LINE_ADD_FRIEND_URL = process.env.LINE_ADD_FRIEND_URL || '';
+const LINE_OA_ID = process.env.LINE_OA_ID || '';
 const OMISE_PUBLIC_KEY = process.env.OMISE_PUBLIC_KEY || '';
 
 const app = express();
@@ -74,6 +76,8 @@ app.get('/api/config', (req, res) => {
     emailConfigured: emailConfigured(),
     omisePublicKey: OMISE_PUBLIC_KEY,
     lineAddFriendUrl: LINE_ADD_FRIEND_URL,
+    lineOaId: LINE_OA_ID,
+    lineVerified: LINE.canVerify(),
     holdHours: db.holdHours()
   });
 });
@@ -288,6 +292,13 @@ app.post('/api/register/:id/notify-paid', (req, res) => {
   if (req.body && req.body.slipImage) patch.slipImage = req.body.slipImage;
   const updated = db.updateRegistration(reg.id, patch);
   res.json({ ok: true, registration: updated });
+
+  // ถ้าลูกค้าผูกไลน์ไว้แล้ว ส่งข้อความรับสลิปให้ทันที (ไม่ต้องรอแอดมิน)
+  if (updated && updated.lineUserId && lineConfigured()) {
+    const ws = db.getWorkshop(updated.workshopId);
+    pushMessage(updated.lineUserId, LINE.buildSlipReceivedMessage(updated, ws, roundOf(ws, updated.roundId)))
+      .catch((e) => console.error('LINE slip ack:', e.message));
+  }
 });
 
 // ---------- public: pay ----------
@@ -519,23 +530,46 @@ app.delete('/api/admin/waitlist/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- LINE webhook (captures userId when a participant messages your OA) ----------
-app.post('/api/line/webhook', (req, res) => {
-  try {
-    const events = (req.body && req.body.events) || [];
-    for (const ev of events) {
-      const userId = ev.source && ev.source.userId;
-      // Match by LINE display text "REG:<id>" if the user sends their ref code
-      const text = ev.message && ev.message.text;
-      if (userId && text) {
-        const m = text.match(/reg_[a-z0-9]+/i);
-        if (m) db.updateRegistration(m[0], { lineUserId: userId });
-      }
-    }
-  } catch (e) {
-    /* ignore */
+// ---------- LINE webhook ของ OA บ้าน-บ้าน สุขพอดี ----------
+// ลูกค้าส่ง "รหัสอ้างอิง" (reg_xxxx) เข้ามาในแชท -> ผูก userId เข้ากับใบสมัคร
+// แล้วระบบจะ push ใบยืนยันมาที่แชทนี้ได้ตอนแอดมินกดยืนยัน
+async function handleLineEvent(ev) {
+  const userId = ev.source && ev.source.userId;
+  if (!userId) return;
+
+  if (ev.type === 'follow') {
+    return LINE.reply(ev.replyToken, LINE.buildWelcomeMessage());
   }
-  res.json({ ok: true });
+  if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
+
+  const text = String(ev.message.text || '');
+  const m = text.match(/reg_[a-z0-9]+/i);
+  if (!m) return; // ข้อความอื่น ๆ ปล่อยให้แอดมินตอบเองในแอป LINE OA
+
+  const id = m[0].toLowerCase();
+  const reg = db.getRegistration(id);
+  if (!reg) return LINE.reply(ev.replyToken, LINE.buildNotFoundMessage());
+
+  db.updateRegistration(reg.id, { lineUserId: userId });
+  const ws = db.getWorkshop(reg.workshopId);
+  const round = roundOf(ws, reg.roundId);
+  return LINE.reply(ev.replyToken, LINE.buildLinkedMessage(reg, ws, round));
+}
+
+app.post('/api/line/webhook', (req, res) => {
+  res.status(200).end(); // ตอบ LINE ให้ไวที่สุด แล้วค่อยทำงานต่อเบื้องหลัง
+  // ถ้าตั้ง LINE_CHANNEL_SECRET ไว้ ต้องผ่านการตรวจลายเซ็นก่อนเสมอ
+  if (LINE.canVerify() && !LINE.verify(req.rawBody, req.get('x-line-signature'))) {
+    console.warn('LINE webhook: ลายเซ็นไม่ถูกต้อง — ข้ามคำขอนี้');
+    return;
+  }
+  if (!LINE.canVerify()) {
+    console.warn('LINE webhook: ยังไม่ได้ตั้ง LINE_CHANNEL_SECRET — ยังไม่ได้ตรวจลายเซ็น');
+  }
+  const events = (req.body && req.body.events) || [];
+  for (const ev of events) {
+    handleLineEvent(ev).catch((e) => console.error('LINE webhook:', e.message));
+  }
 });
 
 // ---------- admin: payment settings (bank QR + account) ----------
@@ -694,5 +728,6 @@ db.init()
       console.log(`   หน้าผู้สมัคร (public):  http://localhost:${PORT}`);
       console.log(`   หน้าผู้ดูแล (admin):    http://localhost:${PORT}/admin`);
       console.log(`   LINE OA push:    ${lineConfigured() ? 'ready ✓' : 'manual mode (no token)'}`);
+      console.log(`   LINE webhook:    ${LINE.canVerify() ? 'signature verified ✓' : 'no LINE_CHANNEL_SECRET (unverified)'}`);
     });
   });
