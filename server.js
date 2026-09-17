@@ -680,6 +680,7 @@ app.get('/classroom/download', requireClassroom, (req, res) => {
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/workshop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'workshop.html')));
 app.get('/my', (req, res) => res.sendFile(path.join(__dirname, 'public', 'my.html')));
+app.get('/pricing', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pricing.html')));
 
 db.init()
   .catch((e) => console.error('DB init error:', e.message))
