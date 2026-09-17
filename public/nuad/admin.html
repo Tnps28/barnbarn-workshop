@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>หน้าพี่หนึ่ง · จองนวด BARNBARN</title>
+<meta name="theme-color" content="#211210">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chonburi&family=Sarabun:wght@400;500;600;700&family=Noto+Sans+Thai:wght@600;800&display=swap">
+<link rel="stylesheet" href="/nuad/style.css">
+</head>
+<body>
+<header class="bbnav"><a class="bb-brand" href="/"><span class="bb-logo" aria-hidden="true">🌿</span>BARNBARN <small>หน้าพี่หนึ่ง</small></a><nav><a href="/nuad" target="_blank">หน้าลูกค้า ↗</a></nav></header>
+<div class="mast" id="mast"><p class="m-eyebrow">หน้าพี่หนึ่ง</p></div>
+<div class="teeth" aria-hidden="true"></div>
+<main class="wrap wide"><section class="pane" id="app"></section></main>
+<div id="sheet"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/nuad/vendor/qrcode-generator.js"></script>
+<script type="module">
+import { $, esc, thn, DAYN, api, toast, drawQR, shareHref, header } from '/nuad/shared.js';
+import { toT, thDate, clock, TEMPLATES } from '/nuad/messages.js';
+
+let PASS = ''; try { PASS = sessionStorage.getItem('nuad_pass') || ''; } catch {}
+let D = null, sheet = null, setOpen = false, busy = false;
+const adm = (url, opts = {}) => api(url, { ...opts, headers: { 'x-nuad-password': PASS } });
+
+// ---------------------------------------------------------------- เข้าสู่ระบบ
+function rLogin(err) {
+  $('#app').innerHTML = `<h2 class="step">เข้าหน้าพี่หนึ่ง</h2>
+  <form class="form" id="login"><label for="pw">รหัสผ่าน</label><input id="pw" type="password" autocomplete="current-password" required>
+  ${err ? `<p class="err">${esc(err)}</p>` : ''}<button class="btn primary big">เข้าสู่ระบบ</button></form>`;
+  $('#pw').focus();
+  $('#login').onsubmit = async (e) => {
+    e.preventDefault(); PASS = $('#pw').value;
+    try { await api('/api/nuad/admin/login', { method: 'POST', body: JSON.stringify({ password: PASS }) }); try { sessionStorage.setItem('nuad_pass', PASS); } catch {} await load(); }
+    catch (er) { rLogin(er.message); }
+  };
+}
+async function load() {
+  try { D = await adm('/api/nuad/admin/today'); render(); }
+  catch (e) { if (/รหัสผ่าน|ADMIN/.test(e.message)) { PASS = ''; rLogin(e.message); } else toast(e.message); }
+}
+setInterval(() => { if (PASS && D && !sheet && !busy && !document.hidden && !document.activeElement?.matches('input')) load(); }, 10000);
+
+// ---------------------------------------------------------------- หน้าจอ
+const CHIP = { hold: ['รอโอน', 'c-hold'], slip: ['ส่งสลิปแล้ว', 'c-slip'], paid: ['ชำระแล้ว', 'c-paid'], done: ['นวดเสร็จ', 'c-done'], noshow: ['ไม่มา', 'c-no'], expired: ['หมดเวลากัน', 'c-exp'], cancelled: ['ยกเลิก', 'c-exp'] };
+const chip = (st) => `<span class="chip ${CHIP[st][1]}">${CHIP[st][0]}</span>`;
+const lineChip = (x) => (x.linked ? '<span class="chip c-line">LINE</span>' : '');
+const cd = (b) => { const s = Math.max(0, Math.round((b.holdUntil - Date.now()) / 1000)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+
+function bookingRow(b, dateLabel) {
+  let a = '';
+  if (b.status === 'hold') a = `<span class="cdn">รอโอน เหลือ <b data-cd="${b.holdUntil}">${cd(b)}</b></span>`;
+  if (['slip', 'expired'].includes(b.status)) a += `<button class="btn primary sm" data-a="bk" data-v="${b.id}:paid">ได้รับเงินแล้ว</button>`;
+  if (b.status === 'paid' && dateLabel === null) a += `<button class="btn ghost sm" data-a="bk" data-v="${b.id}:done">นวดเสร็จ</button><button class="btn ghost sm" data-a="bk" data-v="${b.id}:noshow">ไม่มา</button>`;
+  if (['hold', 'slip', 'paid', 'done'].includes(b.status)) a += `<button class="btn line sm" data-a="msg" data-v="b:${b.id}">ส่งข้อความ</button>`;
+  if (['hold', 'slip', 'paid'].includes(b.status) && dateLabel !== null) a += `<button class="btn ghost sm" data-a="bk" data-v="${b.id}:cancelled">ยกเลิก</button>`;
+  return `<li class="item ${['expired', 'noshow', 'cancelled'].includes(b.status) ? 'dim' : ''}"><span class="k">${toT(b.time)}${dateLabel ? `<small>${dateLabel}</small>` : ''}</span>
+    <div class="who"><b>${esc(b.name)} ${chip(b.status)} ${lineChip(b)}</b><small>รหัส ${b.id} · <a href="tel:${esc(b.phone)}">${esc(b.phone)}</a></small></div>
+    <div class="acts">${a}</div></li>`;
+}
+
+function render() {
+  const s = D.settings;
+  $('#mast').innerHTML = header(s);
+  const q = D.queue, sv = q.find((x) => x.status === 'serving'), wait = q.filter((x) => x.status === 'waiting');
+  const slips = D.today.filter((b) => b.status === 'slip').length + D.tomorrow.filter((b) => b.status === 'slip').length + D.upcoming.filter((b) => b.status === 'slip').length + q.filter((x) => x.slipAt && !x.paid).length;
+  const stats = [['นัดวันนี้', D.today.filter((b) => ['hold', 'slip', 'paid', 'done'].includes(b.status)).length, ''], ['รอหน้าร้าน', wait.length, ''], ['รอดูสลิป', slips, slips ? 'alert' : ''], ['เสร็จแล้ว', D.today.filter((b) => b.status === 'done').length + q.filter((x) => x.status === 'done').length, '']];
+  let h = '';
+  if (!D.line.on) h += `<div class="note info">ยังไม่ได้เปิด LINE อัตโนมัติ — ข้อความทุกอันต้องกดส่งเอง (ตั้ง NUAD_LINE_* ใน Render)</div>`;
+  if (D.storage === 'file') h += `<div class="note bad">ยังไม่ได้ต่อฐานข้อมูล — ถ้าเปิดใช้งานจริงแบบนี้ ข้อมูลจะหายตอนอัปเดตเว็บ</div>`;
+  h += `<div class="stats">${stats.map(([l, v, c]) => `<div class="stat ${c}"><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+
+  const main = wait.length ? `<button class="btn primary big" data-a="next">${sv ? 'เสร็จแล้ว · เรียกคิวถัดไป' : 'เรียกคิวถัดไป'}</button>`
+    : sv ? `<button class="btn primary big" data-a="q" data-v="${sv.no}:done">นวดเสร็จแล้ว</button>` : `<button class="btn primary big" disabled>ยังไม่มีคิวรอ</button>`;
+  h += `<div class="serving"><div class="sv-l"><span class="eyebrow">กำลังนวด</span>${sv
+    ? `<div class="sv-no">${thn(sv.no)}</div><div class="sv-who">${esc(sv.name)}<small>เริ่ม ${toT(sv.startedMin)} · ถึงประมาณ ${toT(sv.startedMin + s.slotMin)} น.</small></div>`
+    : `<div class="sv-who">ว่างอยู่<small>พร้อมรับคิวถัดไป</small></div>`}</div>
+    <div class="sv-a">${main}${sv ? `<button class="btn ghost sm" data-a="msg" data-v="q:${sv.no}">ส่งข้อความถึง${esc(sv.name)}</button>` : ''}</div></div>`;
+
+  h += `<h3 class="sec">คิวหน้าร้าน <small>เรียงตามลำดับที่จะเรียก</small></h3>` + (wait.length ? `<ul class="list">${wait.map((x) => `<li class="item"><span class="k">${x.no}</span>
+      <div class="who"><b>${esc(x.name)} ${lineChip(x)} ${x.slipAt && !x.paid ? '<span class="chip c-slip">ส่งสลิปแล้ว</span>' : ''}${x.paid ? '<span class="chip c-paid">ชำระแล้ว</span>' : ''}</b><small>ได้นวดประมาณ ${x.est != null ? toT(x.est) + ' น.' : 'เกินเวลาปิด'}</small></div>
+      <div class="acts"><button class="btn line sm" data-a="msg" data-v="q:${x.no}">ส่งข้อความ</button>${x.paid ? '' : `<button class="btn ghost sm" data-a="q" data-v="${x.no}:paid">ได้รับเงิน</button>`}<button class="btn ghost sm" data-a="q" data-v="${x.no}:skip">ข้ามไปก่อน</button><button class="btn ghost sm" data-a="q" data-v="${x.no}:noshow">ไม่มา</button></div></li>`).join('')}</ul>`
+    : `<p class="hint">ยังไม่มีคิวรอหน้าร้าน</p>`);
+  const doneQ = q.filter((x) => ['done', 'noshow'].includes(x.status) && !x.paid);
+  if (doneQ.length) h += `<details class="box"><summary>บัตรคิวที่จบแล้ววันนี้ · ${doneQ.length} คนยังไม่กดรับเงิน</summary><ul class="list">${doneQ.map((x) => `<li class="item dim"><span class="k">${x.no}</span><div class="who"><b>${esc(x.name)} ${x.slipAt ? '<span class="chip c-slip">ส่งสลิปแล้ว</span>' : ''}</b></div><div class="acts">${x.status === 'noshow' ? `<button class="btn ghost sm" data-a="q" data-v="${x.no}:back">กลับเข้าคิว</button>` : ''}<button class="btn ghost sm" data-a="q" data-v="${x.no}:paid">ได้รับเงิน</button><button class="btn line sm" data-a="msg" data-v="q:${x.no}">ส่งข้อความ</button></div></li>`).join('')}</ul></details>`;
+
+  h += `<h3 class="sec">นัดวันนี้</h3>` + (D.today.length ? `<ul class="list">${D.today.map((b) => bookingRow(b, null)).join('')}</ul>` : '<p class="hint">วันนี้ยังไม่มีนัด</p>');
+  if (D.tomorrow.length) h += `<h3 class="sec">นัดพรุ่งนี้ <small>${s.autoRemind && D.line.on ? 'ระบบเตือนคนที่ผูก LINE อัตโนมัติหลัง 18:00' : 'กดส่งเตือนได้'}</small></h3><ul class="list">${D.tomorrow.map((b) => bookingRow(b, 'พรุ่งนี้')).join('')}</ul>`;
+  if (D.upcoming.length) h += `<details class="box"><summary>นัดวันถัดไป (${D.upcoming.length})</summary><ul class="list">${D.upcoming.map((b) => bookingRow(b, new Date(b.date + 'T00:00:00Z').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', timeZone: 'UTC' }))).join('')}</ul></details>`;
+
+  h += `<details class="box no-print"><summary>QR หน้าร้าน สำหรับรับบัตรคิว</summary><div style="display:grid;justify-items:center;gap:8px;padding:8px 0 12px">
+      <div class="qr" id="walk-qr"></div><p class="hint">${esc(location.origin)}/nuad?walk=1</p><button class="btn ghost sm" data-a="print">พิมพ์ติดหน้าร้าน</button></div></details>`;
+
+  h += `<details class="box" id="settings" ${setOpen ? 'open' : ''}><summary>ตั้งค่าร้าน</summary><form class="form" id="setform">
+    <label for="st-shop">ชื่อร้าน</label><input id="st-shop" name="shopName" value="${esc(s.shopName)}">
+    <label for="st-name">ชื่อที่ลงท้ายข้อความ</label><input id="st-name" name="name" value="${esc(s.name)}">
+    <label for="st-place">สถานที่ (ขึ้นท้ายข้อความ)</label><input id="st-place" name="place" value="${esc(s.place || '')}">
+    <label for="st-pp">พร้อมเพย์ (เบอร์มือถือหรือเลขบัตรประชาชน)</label><input id="st-pp" name="pp" inputmode="numeric" value="${esc(s.pp)}">
+    <div class="grid2">
+      <div><label for="st-open">เปิด</label><input id="st-open" name="open" type="time" value="${s.open}"></div>
+      <div><label for="st-close">ปิด</label><input id="st-close" name="close" type="time" value="${s.close}"></div>
+      <div><label for="st-bs">พักตั้งแต่</label><input id="st-bs" name="breakStart" type="time" value="${s.breakStart}"></div>
+      <div><label for="st-be">ถึง</label><input id="st-be" name="breakEnd" type="time" value="${s.breakEnd}"></div>
+      <div><label for="st-slot">เวลาต่อคิว (นาที)</label><input id="st-slot" name="slotMin" type="number" min="15" max="240" step="15" value="${s.slotMin}"></div>
+      <div><label for="st-hold">กันคิวรอโอน (นาที)</label><input id="st-hold" name="holdMin" type="number" min="5" max="180" value="${s.holdMin}"></div>
+    </div>
+    <label>วันหยุดประจำ</label><div class="days-pick">${DAYN.map((d, i) => `<label><input type="checkbox" name="closed" value="${i}" ${s.closedDays.includes(i) ? 'checked' : ''}> ${d}</label>`).join('')}</div>
+    <label class="check"><input type="checkbox" name="notifyOwner" ${s.notifyOwner ? 'checked' : ''}> แจ้งพี่หนึ่งทาง LINE เมื่อมีนัดใหม่หรือสลิปใหม่</label>
+    <label class="check"><input type="checkbox" name="autoRemind" ${s.autoRemind ? 'checked' : ''}> เตือนลูกค้านัดพรุ่งนี้อัตโนมัติ (หลัง 18:00)</label>
+    <p class="hint">LINE OA: ${D.line.on ? 'อัตโนมัติ ✓ ' + esc(D.line.oaId || '') : 'กดส่งเอง'} · บัญชีพี่หนึ่ง: ${s.ownerLinked ? 'ผูกแล้ว' : D.line.ownerCodeSet ? 'ยังไม่ผูก — ใช้ LINE ส่วนตัวของพี่หนึ่งทักแชท OA ว่า "ผูกหมอนวด รหัสลับ"' : 'ยังไม่ได้ตั้ง NUAD_OWNER_CODE'}</p>
+    <p class="hint">ข้อความที่ระบบส่งเองนับโควตา LINE OA ของพี่หนึ่ง (ฟรี 300/เดือน) · ตอบกลับตอนลูกค้าทักมาไม่นับ</p>
+    <button class="btn primary">บันทึก</button></form></details>
+    <p class="hint no-print" style="text-align:center"><a href="#" data-a="logout">ออกจากระบบ</a></p>`;
+
+  $('#app').innerHTML = h;
+  const wq = $('#walk-qr'); if (wq) drawQR(wq, location.origin + '/nuad?walk=1');
+  $('#settings').ontoggle = (e) => { setOpen = e.target.open; };
+  $('#setform').onsubmit = saveSettings;
+  renderSheet();
+}
+
+function person(key) {
+  const [k, v] = key.split(':');
+  if (k === 'q') { const x = D.queue.find((q) => q.no === Number(v)); return x && { kind: 'q', rec: x }; }
+  const b = [...D.today, ...D.tomorrow, ...D.upcoming].find((x) => x.id === v);
+  return b && { kind: b.date === D.now.date ? 'b' : 'bt', rec: b };
+}
+function renderSheet() {
+  if (!sheet) { $('#sheet').innerHTML = ''; return; }
+  const p = person(sheet.key); if (!p) { sheet = null; $('#sheet').innerHTML = ''; return; }
+  const auto = p.rec.linked && D.line.on && !sheet.manual;
+  const list = Object.entries(TEMPLATES).filter(([, t]) => t.for.includes(p.kind));
+  $('#sheet').innerHTML = `<div class="scrim" data-a="close"></div><div class="sheet" role="dialog" aria-label="ส่งข้อความ">
+    <div class="sh-h"><b>ส่งข้อความถึง${esc(p.rec.name)}</b><button class="x" data-a="close" aria-label="ปิด">×</button></div>
+    ${sheet.note ? `<div class="note info">${esc(sheet.note)}</div>` : ''}
+    <p class="hint">${auto ? 'ลูกค้าคนนี้ผูก LINE แล้ว — แตะข้อความ ระบบส่งให้ทันที' : 'แตะข้อความ แอป LINE จะเปิดพร้อมข้อความ เลือกแชทลูกค้าแล้วกดส่ง'}</p>
+    ${list.map(([kind, t]) => { const text = t.text(D.settings, p.rec);
+      return auto ? `<button class="tpl" data-a="send" data-v="${sheet.key}|${kind}"><b>${t.label}</b><span>${esc(text)}</span></button>`
+        : `<a class="tpl" href="${shareHref(text)}" target="_blank" rel="noopener" data-a="shared"><b>${t.label}</b><span>${esc(text)}</span></a>`; }).join('')}
+  </div>`;
+}
+
+function handleResults(results = []) {
+  const sent = results.filter((r) => r.sent), manual = results.filter((r) => r.text && !r.sent);
+  if (sent.length) toast('ส่งทาง LINE แล้ว: ' + sent.map((r) => r.name).join(', '));
+  if (manual.length) {
+    const r = manual[0];
+    sheet = { key: r.key, manual: true, note: `${r.name} ส่งอัตโนมัติไม่ได้ (ยังไม่ผูก LINE หรือ LINE ขัดข้อง) — แตะ "${TEMPLATES[r.kind].label}" เพื่อส่งเอง${manual.length > 1 ? ` (และ ${manual.slice(1).map((x) => x.name).join(', ')})` : ''}` };
+  }
+}
+async function act(url, body) {
+  busy = true;
+  try { const r = await adm(url, { method: 'POST', body: JSON.stringify(body || {}) }); await load(); handleResults(r.results); renderSheet(); }
+  catch (e) { toast(e.message); }
+  busy = false;
+}
+async function saveSettings(e) {
+  e.preventDefault();
+  const f = new FormData(e.target), body = {};
+  for (const k of ['shopName', 'name', 'place', 'pp', 'open', 'close', 'breakStart', 'breakEnd', 'slotMin', 'holdMin']) body[k] = f.get(k);
+  body.closedDays = f.getAll('closed').map(Number);
+  body.notifyOwner = f.has('notifyOwner'); body.autoRemind = f.has('autoRemind');
+  try { await adm('/api/nuad/admin/settings', { method: 'PUT', body: JSON.stringify(body) }); toast('บันทึกแล้ว'); await load(); } catch (er) { toast(er.message); }
+}
+
+const A = {
+  next: () => act('/api/nuad/admin/call-next'),
+  q: (v) => { const [no, a] = v.split(':'); return act(`/api/nuad/admin/queue/${no}/${a}`); },
+  bk: (v) => { const [id, a] = v.split(':'); if (a === 'cancelled' && !confirm('ยกเลิกนัดนี้?')) return; return act(`/api/nuad/admin/bookings/${id}/${a}`); },
+  msg: (v) => { sheet = { key: v }; renderSheet(); },
+  close: () => { sheet = null; renderSheet(); },
+  send: async (v) => { const [target, kind] = v.split('|'); sheet = null; renderSheet(); await act('/api/nuad/admin/send', { target, kind }); },
+  shared: () => { setTimeout(() => { sheet = null; renderSheet(); }, 80); toast('เปิด LINE แล้ว — เลือกแชทแล้วกดส่ง'); },
+  print: () => window.print(),
+  logout: () => { PASS = ''; try { sessionStorage.removeItem('nuad_pass'); } catch {} rLogin(); },
+};
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-a]'); if (!el || el.disabled) return;
+  if (el.tagName === 'A' && el.dataset.a !== 'shared') e.preventDefault();
+  A[el.dataset.a]?.(el.dataset.v);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheet) { sheet = null; renderSheet(); } });
+setInterval(() => document.querySelectorAll('[data-cd]').forEach((el) => { const s = Math.max(0, Math.round((Number(el.dataset.cd) - Date.now()) / 1000)); el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }), 1000);
+
+PASS ? load() : rLogin();
+</script>
+</body>
+</html>

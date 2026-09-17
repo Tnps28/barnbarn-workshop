@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>จองคิวนวดพี่หนึ่ง · BARNBARN</title>
+<meta name="description" content="นวดแผนไทยกับพี่หนึ่งที่บ้าน-บ้าน BARNBARN — จองเวลาล่วงหน้า หรือรับบัตรคิวหน้าร้าน แจ้งเตือนทาง LINE">
+<meta property="og:title" content="จองคิวนวดพี่หนึ่ง · BARNBARN">
+<meta property="og:description" content="จองเวลาล่วงหน้า หรือรับบัตรคิว ไม่ต้องยืนรอ ถึงคิวแล้ว LINE ทักเอง">
+<meta name="theme-color" content="#211210">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chonburi&family=Sarabun:wght@400;500;600;700&family=Noto+Sans+Thai:wght@600;800&display=swap">
+<link rel="stylesheet" href="/nuad/style.css">
+</head>
+<body>
+<header class="bbnav">
+  <a class="bb-brand" href="/"><span class="bb-logo" aria-hidden="true">🌿</span>BARNBARN <small>บ้าน-บ้าน สุขพอดี</small></a>
+  <nav><a href="/#calendar">กิจกรรม</a><a href="/nuad">จองนวด</a></nav>
+</header>
+<div class="mast" id="mast"><p class="m-info">กำลังโหลด…</p></div>
+<div class="teeth" aria-hidden="true"></div>
+<main class="wrap"><section class="pane" id="app" aria-live="polite"></section></main>
+<footer class="bbfoot" id="foot"></footer>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/nuad/vendor/qrcode-generator.js"></script>
+<script type="module">
+import { $, esc, thn, DAYN, api, toast, ppPayload, drawQR, shareHref, oaChatHref, header, LINE_SVG, BB_ADD_FRIEND, copyText } from '/nuad/shared.js';
+import { toT, thDate, clock } from '/nuad/messages.js';
+
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const qs = new URLSearchParams(location.search);
+const U = { tab: qs.get('walk') ? 'walk' : 'book', date: null, time: null, slots: [], name: store.get('nuad_name') || '', phone: store.get('nuad_phone') || '', consent: false, err: '',
+  booking: null, amt: '', wname: store.get('nuad_name') || '', werr: '', ticket: null, myPhone: store.get('nuad_phone') || '', myList: null, myErr: '', trackNo: '', track: null, busy: false, bb: [] };
+let P;
+const pv = (t) => `/api/nuad${t}`;
+const hasOA = () => P.line.on;
+const addFriend = () => P.line.addFriend || (P.line.oaId ? 'https://line.me/R/ti/p/' + encodeURIComponent(P.line.oaId) : '');
+const bbFriend = () => P.line.bbFriend || BB_ADD_FRIEND;
+
+async function start() {
+  P = await api(pv('/public'));
+  document.title = `จองคิว${P.settings.shopName} · BARNBARN`;
+  U.date = P.days.find((d) => !d.closed)?.date || P.today;
+  const bid = qs.get('b') || store.get('nuad_booking');
+  if (bid) { const b = await api(pv('/bookings/' + bid)).catch(() => null); if (b && (qs.get('b') || (b.date >= P.today && ['hold', 'slip', 'paid'].includes(b.status)))) U.booking = b; }
+  const t = store.get('nuad_ticket');
+  if (t && t.date === P.today) U.ticket = await api(pv('/queue/' + t.no)).catch(() => null);
+  if (U.ticket && !qs.get('b') && !U.booking && ['waiting', 'serving'].includes(U.ticket.status) && !qs.get('walk')) U.tab = 'walk';
+  api(pv('/barnbarn')).then((x) => { U.bb = x; render(); }).catch(() => {});
+  await loadSlots();
+  render(); foot();
+  setInterval(poll, 12000); setInterval(countdown, 1000);
+}
+async function loadSlots() { U.slots = await api(pv('/slots?date=' + U.date)).catch(() => []); }
+
+async function poll() {
+  if (document.hidden) return;
+  const busyInput = document.activeElement?.matches('input');
+  const pub = await api(pv('/public')).catch(() => null); if (pub) P = pub;
+  if (U.booking && ['hold', 'slip'].includes(U.booking.status)) { const b = await api(pv('/bookings/' + U.booking.id)).catch(() => null); if (b) U.booking = b; }
+  if (U.ticket && ['waiting', 'serving'].includes(U.ticket.status)) { const t = await api(pv('/queue/' + U.ticket.no)).catch(() => null); if (t) U.ticket = t; }
+  if (U.tab === 'book' && !U.booking && U.time == null) await loadSlots();
+  if (!busyInput) render(); else $('#mast').innerHTML = header(P.settings, P.live);
+}
+function countdown() {
+  const el = $('[data-cd]'); if (!el || !U.booking) return;
+  const s = Math.max(0, Math.round((U.booking.holdUntil - Date.now()) / 1000));
+  el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  if (s === 0 && U.booking.status === 'hold') poll();
+}
+
+// ---------------------------------------------------------------- ส่วนประกอบ
+function render() {
+  $('#mast').innerHTML = header(P.settings, P.live);
+  const tabs = [['book', 'จองล่วงหน้า'], ['walk', 'รับบัตรคิว'], ['my', 'นัดของฉัน']];
+  $('#app').innerHTML = `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button class="seg-b ${U.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" role="tab" aria-selected="${U.tab === k}">${l}</button>`).join('')}</div>`
+    + (U.tab === 'book' ? (U.booking ? rBooked() : rBook()) : U.tab === 'walk' ? rWalk() : rMy());
+  document.querySelectorAll('[data-qr]').forEach((el) => drawQR(el, ppPayload(P.settings.pp, el.dataset.amt)));
+  countdown();
+}
+const progress = (n) => `<ol class="progress">${['เลือกเวลา', 'ข้อมูลผู้จอง', 'โอน + ส่งสลิป'].map((l, i) => `<li class="${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}">${l}</li>`).join('')}</ol>`;
+
+function foot() {
+  $('#foot').innerHTML = `${addFriend() ? `<a class="line-pill" href="${esc(addFriend())}" target="_blank" rel="noopener">${LINE_SVG}เพิ่มเพื่อน LINE ${esc(P.settings.name)}</a><span>รับแจ้งเตือนคิวนวด</span>` : ''}
+    <a class="line-pill" style="background:#e8863c" href="${esc(bbFriend())}" target="_blank" rel="noopener">🌿 เพิ่มเพื่อน LINE BARNBARN</a>
+    <span>รับข่าวเวิร์กช็อปและกิจกรรมของบ้าน-บ้าน</span>
+    <span><a href="/">หน้าแรก BARNBARN</a> · <a href="/nuad/privacy.html">ความเป็นส่วนตัว</a> · <a href="/nuad/admin" rel="nofollow">สำหรับ${esc(P.settings.name)}</a></span>`;
+}
+
+function bbCard(title) {
+  if (!U.bb.length) return '';
+  const fmt = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return `<div class="bbcard"><h4><span class="bb-logo" aria-hidden="true">🌿</span>${title}</h4>
+    <ul>${U.bb.map((w) => `<li><a href="/workshop?id=${encodeURIComponent(w.id)}"><b>${esc(w.title)}</b><small>${fmt(w.date)}${w.time ? ' · ' + esc(w.time) : ''}</small><span>ดู ›</span></a></li>`).join('')}</ul>
+    <a class="more" href="/#calendar">ดูปฏิทินกิจกรรมทั้งหมด ›</a></div>`;
+}
+
+function rBook() {
+  const s = P.settings;
+  if (U.time == null) {
+    const days = P.days.map((d, i) => `<button class="day ${U.date === d.date ? 'on' : ''}" data-a="date" data-v="${d.date}" ${d.closed ? 'disabled' : ''}>
+      <span>${i === 0 ? 'วันนี้' : i === 1 ? 'พรุ่งนี้' : DAYN[d.wd]}</span><b>${d.closed ? 'หยุด' : Number(d.date.slice(8)) + ' ' + new Date(d.date + 'T00:00:00Z').toLocaleDateString('th-TH', { month: 'short', timeZone: 'UTC' })}</b></button>`).join('');
+    return progress(1) + `<p class="lead">นวดกับ${esc(s.name)} คิวละ ${s.slotMin} นาที · ค่านวดตามที่ตกลงกันหน้างาน</p>
+      <div class="days" role="group" aria-label="เลือกวัน">${days}</div>
+      ${U.slots.some((x) => x.ok)
+        ? `<div class="slots" role="group" aria-label="เลือกเวลา">${U.slots.map((x) => `<button class="slot" data-a="time" data-v="${x.t}" ${x.ok ? '' : 'disabled'} aria-label="${toT(x.t)}${x.ok ? '' : ' ไม่ว่าง'}">${toT(x.t)}</button>`).join('')}</div>
+           <p class="hint">เวลาที่ขีดฆ่ามีคนจองแล้ว หรือเป็นช่วงคิวหน้าร้าน</p>`
+        : `<p class="empty">${thDate(U.date)} คิวเต็มแล้ว ลองวันอื่นนะคะ</p>`}`;
+  }
+  return progress(2) + `<div class="sum" style="margin-top:0"><span>${thDate(U.date)} · <b style="color:var(--ink)">${toT(U.time)} น.</b></span><button class="btn ghost sm" data-a="untime">เปลี่ยนเวลา</button></div>
+    <div class="form">
+      <label for="bk-name">ชื่อ</label><input id="bk-name" data-f="name" value="${esc(U.name)}" placeholder="เช่น คุณแพร" autocomplete="name" maxlength="40">
+      <label for="bk-phone">เบอร์โทร</label><input id="bk-phone" data-f="phone" value="${esc(U.phone)}" inputmode="tel" placeholder="08x-xxx-xxxx" autocomplete="tel" maxlength="12">
+      <label class="check" for="bk-ok"><input type="checkbox" id="bk-ok" data-f="consent" ${U.consent ? 'checked' : ''}>ยินยอมให้ BARNBARN เก็บชื่อและเบอร์ไว้ใช้นัดหมาย (<a href="/nuad/privacy.html" target="_blank">อ่าน</a>)</label>
+      ${U.err ? `<p class="err" role="alert">${esc(U.err)}</p>` : ''}
+      <button class="btn primary big" data-a="book" ${U.busy ? 'disabled' : ''}>${U.busy ? 'กำลังจอง…' : `ยืนยัน · กันเวลาไว้ ${s.holdMin} นาที`}</button>
+      <p class="hint">กดแล้วโอนและส่งสลิปภายใน ${s.holdMin} นาที ไม่งั้นเวลานี้จะเปิดให้คนอื่นจอง</p>
+    </div>`;
+}
+
+function payCard(amtId, n) {
+  const s = P.settings;
+  if (!s.pp) return `<div class="stepcard"><h4>${n} โอนเงิน</h4><p class="hint">ร้านยังไม่ได้ตั้งเลขพร้อมเพย์ ทักถามใน LINE ได้เลยค่ะ</p></div>`;
+  return `<div class="stepcard"><h4>${n} โอนผ่านพร้อมเพย์</h4>
+    <div class="pay" style="border:0;padding:4px 0;background:transparent">
+      <div class="qr" data-qr data-amt="${esc(U.amt)}"></div>
+      <div class="copy-row"><span class="pay-to">${esc(s.name)}</span><code>${esc(s.pp)}</code><button class="btn ghost sm" data-a="copy" data-v="${esc(s.pp.replace(/\D/g, ''))}">คัดลอกเลข</button></div>
+      <label class="hint" for="${amtId}">ใส่ยอดลงใน QR (ไม่ใส่ก็ได้ ใส่ตอนโอนเอง)</label>
+      <div class="amt"><input id="${amtId}" data-f="amt" inputmode="decimal" value="${esc(U.amt)}" placeholder="ไม่ระบุ"><span>บาท</span></div>
+      <p class="tip">จ่ายจากมือถือเครื่องนี้? แคปหน้าจอ QR แล้วเปิดแอปธนาคาร เลือก <b>สแกนจากรูป</b> · หรือกดคัดลอกเลขพร้อมเพย์ไปวาง</p>
+    </div></div>`;
+}
+
+function slipCard(code, n) {
+  const s = P.settings;
+  if (hasOA() && P.line.oaId) return `<div class="stepcard"><h4>${n} ส่งสลิปทาง LINE ${esc(s.name)}</h4>
+    <a class="btn line big full" href="${oaChatHref(P.line.oaId, code)}" target="_blank" rel="noopener" data-a="opened">${LINE_SVG} เปิดแชท LINE ${esc(s.name)}</a>
+    <p class="hint">LINE จะพิมพ์ "<b>${esc(code)}</b>" ไว้ให้ → กดส่ง → แนบรูปสลิปต่อในแชทเดียวกัน ระบบหยุดนับเวลาทันที และจะทักเตือนนัดในแชทนี้</p></div>`;
+  if (hasOA()) return `<div class="stepcard"><h4>${n} ส่งสลิปทาง LINE ${esc(s.name)}</h4>
+    <div class="codebig">${esc(code)}</div>
+    <div class="row2"><button class="btn ghost" data-a="copy" data-v="${esc(code)}">คัดลอกข้อความ</button><a class="btn line" href="${esc(addFriend())}" target="_blank" rel="noopener">${LINE_SVG} เปิด LINE</a></div>
+    <p class="hint">เพิ่มเพื่อน LINE ${esc(s.name)} → วางข้อความนี้ในแชท → แนบรูปสลิป</p></div>`;
+  return null;
+}
+
+function calLink(b) {
+  const d = b.date.replace(/-/g, ''), z = (m) => String(Math.floor(m / 60)).padStart(2, '0') + String(m % 60).padStart(2, '0') + '00';
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(`นวดกับ${P.settings.name} @BARNBARN`)
+    + `&dates=${d}T${z(b.time)}/${d}T${z(b.time + P.settings.slotMin)}&ctz=Asia/Bangkok&details=` + encodeURIComponent('รหัสนัด ' + b.id + '\n' + location.origin + '/nuad?b=' + b.id);
+}
+
+function rBooked() {
+  const b = U.booking, s = P.settings;
+  const st = { hold: ['รอโอน', 'c-hold'], slip: ['ส่งสลิปแล้ว', 'c-slip'], paid: ['ยืนยันแล้ว', 'c-paid'], done: ['นวดเสร็จ', 'c-done'], expired: ['หมดเวลากัน', 'c-exp'], noshow: ['ไม่มา', 'c-no'], cancelled: ['ยกเลิก', 'c-exp'] }[b.status];
+  let h = progress(b.status === 'hold' ? 3 : 4) + `<div class="receipt"><div class="r-top"><span>รหัสนัด</span><b>${b.id}</b></div>
+    <div class="r-row"><span>${thDate(b.date)}</span><b>${toT(b.time)} น.</b></div>
+    <div class="r-row"><span>กับ${esc(s.name)} · ${s.slotMin} นาที</span><span class="chip ${st[1]}">${st[0]}</span></div></div>`;
+  const code = 'นัดนวด ' + b.id;
+  if (b.status === 'hold') {
+    const slip = slipCard(code, '②');
+    h += `<div class="hold"><span>กันเวลาไว้ให้อีก</span><b data-cd>--:--</b><span>ถึง ${clock(b.holdUntil)} น.</span></div>` + payCard('bk-amt', '①')
+      + (slip || `<div class="stepcard"><h4>② ส่งสลิปทาง LINE</h4>
+        <a class="btn line big full" href="${shareHref(`แจ้งโอนค่านวด รหัส ${b.id} · ${thDate(b.date)} ${toT(b.time)} น. (แนบสลิปด้านล่าง)`)}" target="_blank" rel="noopener" data-a="slip">${LINE_SVG} ส่งสลิปทาง LINE</a>
+        <p class="hint">เลือกแชท${esc(s.name)} แนบรูปสลิป แล้วกดส่ง</p></div>`);
+  } else if (b.status === 'slip') {
+    h += `<div class="note info">ได้รับสลิปแล้ว หยุดนับเวลาให้แล้วค่ะ · รอ${esc(s.name)}ตรวจแล้วยืนยันใน LINE</div>`;
+  } else if (b.status === 'paid') {
+    h += `<div class="note ok">ยืนยันนัดแล้ว · แล้วพบกัน${thDate(b.date)} เวลา ${toT(b.time)} น. ที่ ${esc(s.place || 'BARNBARN')} ค่ะ</div>`
+      + (hasOA() && !b.linked && P.line.oaId ? `<a class="btn line full" href="${oaChatHref(P.line.oaId, code)}" target="_blank" rel="noopener">${LINE_SVG} รับเตือนนัดทาง LINE</a>` : '');
+  } else if (b.status === 'expired') {
+    h += `<div class="note bad">หมดเวลากัน ${s.holdMin} นาทีแล้ว ถ้าโอนไปแล้ว ทัก LINE ${esc(s.name)} พร้อมรหัส ${b.id} ได้เลย ${esc(s.name)}จะช่วยดูให้ค่ะ</div>`;
+  }
+  if (['hold', 'slip', 'paid'].includes(b.status)) h += `<a class="btn ghost" href="${calLink(b)}" target="_blank" rel="noopener">บันทึกลงปฏิทิน</a>`;
+  if (['slip', 'paid'].includes(b.status)) h += bbCard('มานวดแล้ว แวะดูกิจกรรมที่บ้าน-บ้านด้วยนะ');
+  return h + `<button class="btn ghost" data-a="rebook">จองอีกนัด</button>`;
+}
+
+function ticket(t, name) {
+  let st;
+  if (t.status === 'serving') st = `<p class="t-call">ถึงคิวของคุณแล้ว เชิญเข้ามาได้เลยค่ะ</p>`;
+  else if (t.status === 'waiting') st = `<div class="t-meta"><div><span>รอก่อนหน้า</span><b>${t.ahead} คิว</b></div><div><span>ได้นวดประมาณ</span><b>${t.est != null ? toT(t.est) + ' น.' : 'เกินเวลาปิด'}</b></div></div>`;
+  else st = `<p class="t-call muted">${t.status === 'done' ? 'นวดเสร็จแล้ว ขอบคุณที่มานะคะ' : 'บัตรคิวนี้ถูกยกเลิก เพราะไม่อยู่ตอนเรียกคิว — ทักพี่หนึ่งได้นะคะ'}</p>`;
+  return `<div class="ticket ${t.status === 'serving' ? 'live' : ''}"><div class="t-shop">${esc(P.settings.shopName)} · BARNBARN</div><div class="t-lab">บัตรคิว</div>
+    <div class="t-no">${thn(t.no)}</div><div class="t-ar">คิวที่ ${t.no}${name ? ' · ' + esc(name) : ''}</div>
+    <div class="t-now">กำลังนวด <b>${t.serving ? 'คิว ' + t.serving : '—'}</b></div>${st}</div>`;
+}
+
+function rWalk() {
+  const s = P.settings;
+  if (U.ticket) {
+    const t = U.ticket, active = ['waiting', 'serving'].includes(t.status), code = 'บัตรคิวนวด ' + t.no;
+    let h = ticket(t, store.get('nuad_ticket')?.name);
+    if (active && hasOA()) h += P.line.oaId
+      ? `<a class="btn line big full" href="${oaChatHref(P.line.oaId, code)}" target="_blank" rel="noopener">${LINE_SVG} ${t.linked ? 'LINE จะทักเมื่อใกล้ถึงคิว ✓' : 'ให้ LINE ทักเมื่อใกล้ถึงคิว'}</a>
+         ${t.linked ? '' : `<p class="hint">กดแล้วส่งข้อความ "${code}" ในแชท ${esc(s.name)} · ไปเดินเล่นได้เลย ใกล้ถึงคิวจะทักไป</p>`}`
+      : `<div class="stepcard"><h4>ให้ LINE ทักเมื่อใกล้ถึงคิว</h4><div class="codebig">${esc(code)}</div>
+         <div class="row2"><button class="btn ghost" data-a="copy" data-v="${esc(code)}">คัดลอกข้อความ</button><a class="btn line" href="${esc(addFriend())}" target="_blank" rel="noopener">${LINE_SVG} เปิด LINE</a></div></div>`;
+    if (active && t.status === 'waiting') h += bbCard('ระหว่างรอคิว ลองดูกิจกรรมที่บ้าน-บ้าน');
+    if (active || t.status === 'done') h += `<details class="box"${t.status === 'done' ? ' open' : ''}><summary>จ่ายค่านวดผ่านพร้อมเพย์</summary>${payCard('wk-amt', '')}
+      <p class="hint" style="margin:8px 0 10px">${hasOA() ? `โอนแล้วส่งรูปสลิปในแชท LINE ${esc(s.name)} ได้เลย` : 'โอนแล้วส่งสลิปให้พี่หนึ่งทาง LINE หรือโชว์หน้าร้าน'}</p></details>`;
+    if (t.status === 'done') h += bbCard('แวะดูกิจกรรมที่บ้าน-บ้านก่อนกลับนะคะ');
+    return h + `<button class="btn ghost" data-a="newticket">รับบัตรคิวให้อีกคน</button>`;
+  }
+  if (!P.live.open) return `<div class="note">ตอนนี้ปิดรับคิวหน้าร้าน (เปิด ${thn(s.open.replace(':', '.'))}–${thn(s.close.replace(':', '.'))} น.)</div>
+    <button class="btn primary big" data-a="tab" data-v="book">จองเวลาล่วงหน้าแทน</button>`;
+  return `<p class="lead">มาถึงแล้ว? รับบัตรคิว ไม่ต้องยืนรอ · ตอนนี้รอ <b>${P.live.waiting}</b> คิว</p>
+    <div class="form"><label for="wk-name">ชื่อที่ให้เรียก</label><input id="wk-name" data-f="wname" value="${esc(U.wname)}" placeholder="เช่น คุณต้น" maxlength="40" autocomplete="given-name">
+      ${U.werr ? `<p class="err" role="alert">${esc(U.werr)}</p>` : ''}
+      <button class="btn primary big" data-a="take" ${U.busy ? 'disabled' : ''}>${U.busy ? 'กำลังออกบัตร…' : 'รับบัตรคิว'}</button></div>`;
+}
+
+function rMy() {
+  let h = `<form class="form" data-form="my"><label for="my-phone">ค้นนัดด้วยเบอร์โทร</label>
+    <div class="form row" style="grid-template-columns:1fr auto"><input id="my-phone" data-f="myPhone" value="${esc(U.myPhone)}" inputmode="tel" placeholder="08x-xxx-xxxx"><button class="btn primary sm">ค้นหา</button></div>
+    ${U.myErr ? `<p class="err">${esc(U.myErr)}</p>` : ''}</form>`;
+  if (U.myList) h += U.myList.length ? `<div class="myb">${U.myList.map((b) => `<button class="receipt" style="text-align:left;cursor:pointer" data-a="openb" data-v="${b.id}">
+      <div class="r-top"><span>${thDate(b.date)}</span><b>${toT(b.time)} น.</b></div><div class="r-row"><span>รหัส ${b.id}</span><span>${{ hold: 'รอโอน', slip: 'ส่งสลิปแล้ว', paid: 'ยืนยันแล้ว' }[b.status]} ›</span></div></button>`).join('')}</div>`
+    : `<p class="empty">ไม่พบนัดที่กำลังจะถึงของเบอร์นี้</p>`;
+  h += `<form class="form" data-form="track" style="margin-top:6px"><label for="tr-no">ดูบัตรคิววันนี้</label>
+    <div class="form row" style="grid-template-columns:1fr auto"><input id="tr-no" data-f="trackNo" inputmode="numeric" value="${esc(U.trackNo)}" placeholder="เลขบัตรคิว"><button class="btn ghost sm">ดูคิว</button></div></form>`;
+  if (U.track) h += ticket(U.track);
+  return h;
+}
+
+// ---------------------------------------------------------------- การกด
+const A = {
+  tab: async (v) => { U.tab = v; if (v === 'book' && !U.booking) await loadSlots(); scrollTo({ top: 0, behavior: 'smooth' }); },
+  date: async (v) => { U.date = v; await loadSlots(); },
+  time: (v) => { U.time = Number(v); U.err = ''; setTimeout(() => $('#bk-name')?.focus(), 50); },
+  untime: async () => { U.time = null; await loadSlots(); },
+  book: async () => {
+    U.busy = true; render();
+    try {
+      U.booking = await api(pv('/bookings'), { method: 'POST', body: JSON.stringify({ date: U.date, time: U.time, name: U.name, phone: U.phone, consent: U.consent }) });
+      store.set('nuad_booking', U.booking.id); store.set('nuad_name', U.name.trim()); store.set('nuad_phone', U.phone);
+      U.err = ''; U.amt = ''; U.time = null; toast(`กันเวลาไว้ให้ ${P.settings.holdMin} นาทีแล้วค่ะ`); scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) { U.err = e.message; if (/ไม่ว่าง/.test(e.message)) { U.time = null; await loadSlots(); } }
+    U.busy = false;
+  },
+  slip: async () => { if (U.booking?.status === 'hold') U.booking = await api(pv(`/bookings/${U.booking.id}/slip`), { method: 'POST' }).catch(() => U.booking); },
+  opened: () => toast('ส่งข้อความในแชท แล้วแนบรูปสลิปต่อได้เลยค่ะ'),
+  rebook: async () => { U.booking = null; U.time = null; store.set('nuad_booking', null); await loadSlots(); },
+  take: async () => {
+    U.busy = true; render();
+    try { const t = await api(pv('/queue'), { method: 'POST', body: JSON.stringify({ name: U.wname }) }); U.ticket = t; store.set('nuad_ticket', { no: t.no, date: P.today, name: U.wname.trim() }); store.set('nuad_name', U.wname.trim()); U.werr = ''; U.amt = ''; toast('ได้บัตรคิวที่ ' + t.no + ' แล้วค่ะ'); }
+    catch (e) { U.werr = e.message; }
+    U.busy = false;
+  },
+  newticket: () => { U.ticket = null; U.wname = ''; store.set('nuad_ticket', null); },
+  copy: async (v) => toast((await copyText(v)) ? 'คัดลอกแล้ว' : 'คัดลอกไม่ได้ กดค้างที่ข้อความแทนนะคะ'),
+  openb: async (v) => { U.booking = await api(pv('/bookings/' + v)).catch(() => null); U.tab = 'book'; },
+};
+document.addEventListener('click', async (e) => {
+  const el = e.target.closest('[data-a]'); if (!el || el.disabled) return;
+  const fn = A[el.dataset.a]; if (!fn) return;
+  const isLink = el.tagName === 'A';
+  await fn(el.dataset.v);
+  isLink ? setTimeout(render, 80) : render();
+});
+document.addEventListener('submit', async (e) => {
+  const f = e.target.dataset.form; if (!f) return; e.preventDefault();
+  if (f === 'my') { try { U.myList = await api(pv('/my'), { method: 'POST', body: JSON.stringify({ phone: U.myPhone }) }); U.myErr = ''; store.set('nuad_phone', U.myPhone); } catch (er) { U.myErr = er.message; U.myList = null; } }
+  if (f === 'track') U.track = await api(pv('/queue/' + Number(U.trackNo))).catch((er) => { toast(er.message); return null; });
+  render();
+});
+document.addEventListener('input', (e) => {
+  const f = e.target.dataset.f; if (!f) return;
+  U[f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  if (f === 'amt') { const qr = e.target.closest('.stepcard,.box').querySelector('[data-qr]'); if (qr) { qr.dataset.amt = U.amt; drawQR(qr, ppPayload(P.settings.pp, U.amt)); } }
+});
+
+start().catch((e) => { $('#app').innerHTML = `<p class="err">${esc(e.message)}</p><button class="btn ghost" onclick="location.reload()">ลองใหม่</button>`; });
+</script>
+</body>
+</html>
