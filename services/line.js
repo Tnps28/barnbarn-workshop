@@ -27,11 +27,28 @@ async function call(kind, body) {
   return true;
 }
 
+// รับได้ทั้งข้อความสั้น ๆ หรือ array ของ message object (เช่นข้อความ + รูป)
+function toMessages(input) {
+  const arr = Array.isArray(input) ? input : [input];
+  return arr
+    .filter(Boolean)
+    .map((m) => (typeof m === 'string' ? { type: 'text', text: m } : m))
+    .slice(0, 5); // LINE รับได้สูงสุด 5 ข้อความต่อการเรียก 1 ครั้ง
+}
+
+// รูปภาพ — LINE ต้องการลิงก์ https สาธารณะ (ไม่รับ base64)
+export const imageMessage = (url) => ({
+  type: 'image',
+  originalContentUrl: url,
+  previewImageUrl: url
+});
+
 // ตอบกลับตอนลูกค้าทักมา — ฟรี ใช้ได้ภายใน ~30 วินาทีหลังได้ replyToken
-export async function reply(replyToken, text) {
-  if (!lineConfigured() || !replyToken || !text) return false;
+export async function reply(replyToken, input) {
+  const messages = toMessages(input);
+  if (!lineConfigured() || !replyToken || !messages.length) return false;
   try {
-    return await call('reply', { replyToken, messages: [{ type: 'text', text }] });
+    return await call('reply', { replyToken, messages });
   } catch (e) {
     console.error('LINE reply:', e.message);
     return false;
@@ -40,10 +57,11 @@ export async function reply(replyToken, text) {
 
 // ส่งเอง — ต้องรู้ userId ของลูกค้า (ได้จาก webhook ตอนเขาส่งรหัสอ้างอิงมาในแชท)
 // คืน { sent, demo, error? } เพื่อให้หน้าแอดมินรู้ว่าต้องก๊อปส่งเองไหม
-export async function pushMessage(userId, text) {
-  if (!lineConfigured() || !userId) return { sent: false, demo: true };
+export async function pushMessage(userId, input) {
+  const messages = toMessages(input);
+  if (!lineConfigured() || !userId || !messages.length) return { sent: false, demo: true };
   try {
-    await call('push', { to: userId, messages: [{ type: 'text', text }] });
+    await call('push', { to: userId, messages });
     return { sent: true };
   } catch (e) {
     console.error('LINE push:', e.message);
@@ -68,6 +86,8 @@ export function buildConfirmationMessage(reg, workshop, round) {
     `ยอดชำระ: ${money(reg.amount)} บาท (ชำระแล้ว ✓)`,
     `รหัสอ้างอิง: ${reg.id}`,
     '',
+    '🎟️ รูป QR ด้านล่างคือบัตรเข้างาน วันงานเปิดให้ผู้จัดสแกนได้เลยค่ะ',
+    '',
     'แล้วพบกันที่เวิร์กช็อปนะคะ 😊 หากมีคำถามทักแชทนี้ได้เลยค่ะ'
   ].filter(Boolean).join('\n');
 }
@@ -88,7 +108,8 @@ export function buildLinkedMessage(reg, workshop, round) {
     `รหัสอ้างอิง: ${reg.id}`,
     status,
     '',
-    'ต่อจากนี้เราจะส่งข้อความยืนยันและข่าวสารของรอบนี้มาที่แชทนี้นะคะ 🌿'
+    '🎟️ รูป QR ด้านล่างคือบัตรเข้างาน เก็บไว้ในแชทนี้ได้เลย ไม่ต้องปรินต์',
+    'วันงานเปิดให้ผู้จัดสแกน แล้วข่าวสารของรอบนี้จะส่งมาที่นี่นะคะ 🌿'
   ].filter(Boolean).join('\n');
 }
 
