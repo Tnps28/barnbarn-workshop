@@ -15,6 +15,7 @@ import {
 } from './services/payment.js';
 import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
 import { sendConfirmationEmail, emailConfigured, sendOtpEmail } from './services/email.js';
+import { mountNuad } from './nuad/routes.js';
 
 // --- load .env (tiny parser, no dependency) ---
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,7 +35,10 @@ const LINE_ADD_FRIEND_URL = process.env.LINE_ADD_FRIEND_URL || '';
 const OMISE_PUBLIC_KEY = process.env.OMISE_PUBLIC_KEY || '';
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+// เก็บ raw body ไว้ตรวจลายเซ็น LINE webhook (ระบบจองนวดใช้)
+app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
+// ---------- จองคิวนวดพี่หนึ่ง (/nuad) — โค้ดทั้งหมดอยู่ในโฟลเดอร์ nuad/ ----------
+mountNuad(app, { listWorkshops: db.listWorkshops });
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- helpers ----------
