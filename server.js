@@ -14,6 +14,7 @@ import {
   paymentConfigured
 } from './services/payment.js';
 import * as LINE from './services/line.js';
+import { qrPng } from './services/qr.js';
 import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
 import { sendConfirmationEmail, emailConfigured, sendOtpEmail } from './services/email.js';
 import { mountNuad } from './nuad/routes.js';
@@ -34,6 +35,38 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'barnbarn2026';
 const LINE_ADD_FRIEND_URL = process.env.LINE_ADD_FRIEND_URL || '';
 const LINE_OA_ID = process.env.LINE_OA_ID || '';
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+
+// ---------- โหมดทดสอบ ----------
+// กรอกชื่อนี้ในหน้าสมัคร = ข้ามการตรวจช่องอื่นทั้งหมด ใบที่ได้จะถูกทำเครื่องหมายว่าเป็นใบทดสอบ
+const TEST_NAME = process.env.TEST_REG_NAME || 'Bell2355';
+const isTestName = (name) => String(name || '').trim().toLowerCase() === TEST_NAME.toLowerCase();
+
+// ค่าเริ่มต้นที่เติมให้ใบทดสอบ เพื่อให้ข้อมูลครบเหมือนใบจริง
+const TEST_DEFAULTS = {
+  phone: '0900000000',
+  province: 'กรุงเทพมหานคร',
+  source: 'ทดสอบระบบ',
+  nickname: 'เทสต์',
+  lineId: 'ทดสอบระบบ',
+  age: '30',
+  emergencyName: 'ผู้ติดต่อทดสอบ',
+  emergencyPhone: '0900000000',
+  emergencyRelation: 'ทดสอบ'
+};
+
+// ลิงก์รูป QR บัตรเข้างาน (ต้องเป็น https สาธารณะ LINE ถึงจะดึงรูปได้)
+function ticketQrUrl(regId, req) {
+  const base = PUBLIC_BASE_URL || (req ? `${req.protocol}://${req.get('host')}` : '');
+  return base ? `${base}/api/qr/${encodeURIComponent(regId)}.png` : '';
+}
+
+// ส่งข้อความ + รูป QR บัตรเข้างานในครั้งเดียว (2 ข้อความ)
+// send = LINE.reply (ฟรี) หรือ LINE.pushMessage (กินโควตา)
+async function sendWithTicket(send, target, regId, req, text) {
+  const url = ticketQrUrl(regId, req);
+  return send(target, url ? [text, LINE.imageMessage(url)] : [text]);
+}
 const OMISE_PUBLIC_KEY = process.env.OMISE_PUBLIC_KEY || '';
 
 const app = express();
@@ -66,6 +99,21 @@ function publicWorkshop(ws) {
     }))
   };
 }
+
+// ---------- รูป QR บัตรเข้างาน (สาธารณะ — ตัวรหัสอ้างอิงเองคือกุญแจ) ----------
+app.get('/api/qr/:id.png', (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!db.getRegistration(id)) return res.status(404).end();
+  try {
+    const png = qrPng(id, { scale: 10, quiet: 4 });
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(png);
+  } catch (e) {
+    console.error('QR:', e.message);
+    res.status(500).end();
+  }
+});
 
 // ---------- public config ----------
 app.get('/api/config', (req, res) => {
@@ -171,7 +219,21 @@ app.post('/api/register', (req, res) => {
   if (registerRateLimited(ip)) {
     return res.status(429).json({ error: 'มีการสมัครถี่เกินไปจากอุปกรณ์นี้ กรุณารอสักครู่แล้วลองใหม่ค่ะ' });
   }
-  const { workshopId, roundId, name, phone, email } = req.body || {};
+  const b0 = req.body || {};
+  // โหมดทดสอบ: กรอกแค่ชื่อ TEST_NAME ก็พอ ระบบเติมช่องที่เหลือให้เอง แล้วข้ามการตรวจทั้งหมด
+  const TEST = isTestName(b0.name);
+  if (TEST) {
+    for (const [k, v] of Object.entries(TEST_DEFAULTS)) {
+      if (!String(b0[k] || '').trim()) b0[k] = v;
+    }
+    b0.pdpaConsent = true;
+    const need = Math.max(0, (Number(b0.people) || 1) - 1);
+    const mem = Array.isArray(b0.members) ? b0.members : [];
+    b0.members = Array.from({ length: need }, (_, i) =>
+      (mem[i] && String(mem[i].name || '').trim()) ? mem[i] : { name: `ผู้ร่วมทดสอบ ${i + 2}`, age: '30' });
+  }
+
+  const { workshopId, roundId, name, phone, email } = b0;
   if (!workshopId || !roundId || !name || !phone) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อ เบอร์โทร และเลือกรอบให้ครบถ้วน' });
   }
@@ -215,7 +277,7 @@ app.post('/api/register', (req, res) => {
     const rids = (r.roundIds && r.roundIds.length) ? r.roundIds : [r.roundId];
     return rids.some((id) => selRoundIds.includes(id));
   });
-  if (dup) {
+  if (dup && !TEST) {
     return res.status(409).json({ error: 'เบอร์นี้สมัครรอบนี้ไว้แล้วค่ะ — ดูสถานะได้ที่ "ดูการสมัครของฉัน" หรือทักผู้จัดทาง LINE หากต้องการแก้ไข' });
   }
   // ตรวจที่นั่งให้พอทุกวันที่เลือก
@@ -232,6 +294,7 @@ app.post('/api/register', (req, res) => {
   const addonsTotal = selectedAddons.reduce((s, a) => s + (Number(a.price) || 0), 0);
 
   const reg = db.createRegistration({
+    isTest: TEST,
     workshopId,
     roundId,
     roundIds: selRoundIds,
@@ -423,7 +486,10 @@ app.post('/api/admin/registrations/:id/confirm', requireAdmin, async (req, res) 
   const round = roundOf(ws, reg.roundId);
   const message = buildConfirmationMessage(reg, ws, round);
 
-  const result = await pushMessage(reg.lineUserId || reg.lineId, message);
+  const target = reg.lineUserId || '';
+  const result = target
+    ? await sendWithTicket(pushMessage, target, reg.id, req, message)
+    : { sent: false, demo: true };
   db.updateRegistration(reg.id, {
     status: 'confirmed',
     confirmed: true,
@@ -470,9 +536,19 @@ app.post('/api/admin/registrations/:id/checkin', requireAdmin, (req, res) => {
   }
   let days = attendedDaysOf(reg);
   const already = days.includes(target.id);
-  if (!already) days.push(target.id);
+  // ส่ง { undo: true } มา = ย้อนการเช็คอินของวันนั้น (เผลอกดหรือสแกนผิดคน)
+  const undo = Boolean(req.body && req.body.undo);
+  if (undo) days = days.filter((d) => d !== target.id);
+  else if (!already) days.push(target.id);
   const updated = db.updateRegistration(reg.id, { attendedDays: days, attended: days.length > 0 });
-  res.json({ ok: true, already, name: updated.name, dayLabel: `${target.date} ${target.time}`, workshopTitle: ws ? ws.title : '' });
+  res.json({
+    ok: true,
+    undone: undo,
+    already: undo ? false : already,
+    name: updated.name,
+    dayLabel: `${target.date} ${target.time}`,
+    workshopTitle: ws ? ws.title : ''
+  });
 });
 
 // admin edits a registration (name/phone/people/round/allergy/medical/note); recomputes amount
@@ -533,7 +609,7 @@ app.delete('/api/admin/waitlist/:id', requireAdmin, (req, res) => {
 // ---------- LINE webhook ของ OA บ้าน-บ้าน สุขพอดี ----------
 // ลูกค้าส่ง "รหัสอ้างอิง" (reg_xxxx) เข้ามาในแชท -> ผูก userId เข้ากับใบสมัคร
 // แล้วระบบจะ push ใบยืนยันมาที่แชทนี้ได้ตอนแอดมินกดยืนยัน
-async function handleLineEvent(ev) {
+async function handleLineEvent(ev, req) {
   const userId = ev.source && ev.source.userId;
   if (!userId) return;
 
@@ -550,10 +626,11 @@ async function handleLineEvent(ev) {
   const reg = db.getRegistration(id);
   if (!reg) return LINE.reply(ev.replyToken, LINE.buildNotFoundMessage());
 
-  db.updateRegistration(reg.id, { lineUserId: userId });
-  const ws = db.getWorkshop(reg.workshopId);
-  const round = roundOf(ws, reg.roundId);
-  return LINE.reply(ev.replyToken, LINE.buildLinkedMessage(reg, ws, round));
+  const linked = db.updateRegistration(reg.id, { lineUserId: userId }) || reg;
+  const ws = db.getWorkshop(linked.workshopId);
+  const round = roundOf(ws, linked.roundId);
+  // reply ไม่กินโควตา จึงส่งบัตร QR ให้เลยตั้งแต่ตอนผูกบัญชี
+  return sendWithTicket(LINE.reply, ev.replyToken, linked.id, req, LINE.buildLinkedMessage(linked, ws, round));
 }
 
 app.post('/api/line/webhook', (req, res) => {
@@ -568,7 +645,7 @@ app.post('/api/line/webhook', (req, res) => {
   }
   const events = (req.body && req.body.events) || [];
   for (const ev of events) {
-    handleLineEvent(ev).catch((e) => console.error('LINE webhook:', e.message));
+    handleLineEvent(ev, req).catch((e) => console.error('LINE webhook:', e.message));
   }
 });
 

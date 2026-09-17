@@ -366,6 +366,7 @@ export function createRegistration(payload) {
   const _rids = (Array.isArray(payload.roundIds) && payload.roundIds.length) ? payload.roundIds : [payload.roundId];
   const reg = {
     id: uid('reg'),
+    isTest: !!payload.isTest,   // ใบทดสอบระบบ (สมัครด้วยชื่อทดสอบ) — ลบทิ้งได้เลย
     workshopId: payload.workshopId,
     roundId: _rids[0],        // รอบหลัก (ใช้ร่วมกับโค้ดเดิม)
     roundIds: _rids,          // ทุกวันที่เลือก (โหมดหลายวัน)
