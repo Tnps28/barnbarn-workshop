@@ -126,22 +126,17 @@ async function initMongo() {
     };
   }
 }
-// เขียนคอลเลกชันแบบทับรายตัว (upsert) แล้วค่อยลบตัวที่ไม่มีแล้ว
-// ของเดิมใช้ลบทั้งคอลเลกชันก่อนค่อยใส่ใหม่ ถ้าพังกลางคัน ข้อมูลหายทั้งก้อน
-async function persistCollection(col, docs) {
-  if (docs.length)
-    await col.bulkWrite(
-      docs.map((d) => ({ replaceOne: { filter: { _id: d._id }, replacement: d, upsert: true } })),
-      { ordered: false }
-    );
-  await col.deleteMany({ _id: { $nin: docs.map((d) => d._id) } });
-}
 async function persistMongo(data) {
-  // เขียนการตั้งค่าก่อนเสมอ ถ้าส่วนอื่นพัง ค่าที่ตั้งไว้ (เช่น ไลน์แอดมิน) จะไม่หายไปด้วย
+  await mongo.wk.deleteMany({});
+  if (data.workshops.length)
+    await mongo.wk.insertMany(data.workshops.map((w) => ({ _id: w.id, ...w })));
+  await mongo.rg.deleteMany({});
+  if (data.registrations.length)
+    await mongo.rg.insertMany(data.registrations.map((r) => ({ _id: r.id, ...r })));
   await mongo.st.replaceOne({ _id: 'main' }, { _id: 'main', ...data.settings }, { upsert: true });
-  await persistCollection(mongo.wk, data.workshops.map((w) => ({ _id: w.id, ...w })));
-  await persistCollection(mongo.rg, data.registrations.map((r) => ({ _id: r.id, ...r })));
-  await persistCollection(mongo.wl, (data.waitlist || []).map((w) => ({ _id: w.id, ...w })));
+  await mongo.wl.deleteMany({});
+  if ((data.waitlist || []).length)
+    await mongo.wl.insertMany(data.waitlist.map((w) => ({ _id: w.id, ...w })));
 }
 
 // ---------- init (called once at startup) ----------
@@ -246,14 +241,10 @@ export function removeWaitlist(id) {
   write(db);
   return true;
 }
-// เขียนทีละคิว ถ้าสองคำสั่งเขียนชนกัน คำสั่งหลังจะรอ ไม่ใช่ลงไปทับกันจนพัง
-let _saving = Promise.resolve();
 function write(data) {
   DB = data;
-  if (!mongo) return saveToFile(data);
-  _saving = _saving
-    .then(() => persistMongo(data))
-    .catch((e) => console.error('Mongo save error:', e.message));
+  if (mongo) persistMongo(data).catch((e) => console.error('Mongo save error:', e.message));
+  else saveToFile(data);
 }
 
 // ---------- Settings ----------
