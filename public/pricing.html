@@ -785,9 +785,9 @@
       var care = careOf();
       if (!care){
         $("sumCare").className = "sum-care todo";
-        $("sumCare").innerHTML = '<span class="lab">ค่าดูแลรายเดือน<small>ไม่บังคับ แต่ยังไม่ได้เลือก — เลื่อนขึ้นไปที่ข้อ 5</small></span>' +
+        $("sumCare").innerHTML = '<span class="lab">ค่าดูแลรายเดือน<small>ไม่บังคับ แต่ยังไม่ได้เลือก — เลื่อนขึ้นไปที่ข้อ 6</small></span>' +
           '<span class="amt">ยังไม่ได้เลือก</span>';
-        $("stkCap").textContent = "ราคารวมโดยประมาณ · เหลือเลือกข้อ 5";
+        $("stkCap").textContent = "ราคารวมโดยประมาณ · เหลือเลือกข้อ 6";
       } else {
         $("sumCare").className = "sum-care";
         $("sumCare").innerHTML = '<span class="lab">' + (care.v ? "ค่าดูแลรายเดือน — " + esc(care.t) : "ค่าดูแลรายเดือน") +
