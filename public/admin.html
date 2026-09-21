@@ -39,6 +39,7 @@
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="openWorkshop()">➕ เพิ่มเวิร์กช็อปใหม่</button>
       <button class="btn btn-yellow" onclick="openPaymentSettings()">🏦 ตั้งค่าการชำระเงิน (QR/บัญชี)</button>
+      <button class="btn btn-green" onclick="openReportSettings()">📊 รายงานเข้าไลน์</button>
       <button class="btn btn-blue" onclick="exportExcel()">⬇️ ดาวน์โหลด Excel</button>
       <button class="btn btn-green" onclick="openScanner()">📷 สแกนเช็คอิน</button>
       <button class="btn btn-ghost" onclick="repairSeats()">🔧 ซ่อมข้อมูลที่นั่ง</button>
@@ -139,6 +140,27 @@
         <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
         <button class="btn btn-primary" style="flex:1" onclick="savePaymentSettings()">บันทึก</button>
       </div>
+    </div>
+  </div>
+
+  <!-- LINE REPORT SETTINGS MODAL -->
+  <div class="modal-bg" id="report-modal">
+    <div class="modal">
+      <h3>📊 รายงานเข้าไลน์แอดมิน</h3>
+      <p class="muted" style="margin-top:-6px">ส่งสรุปกิจกรรมประจำวัน และแจ้งเตือนทันทีเมื่อมีใบสมัคร/สลิปใหม่ เข้าไลน์ส่วนตัวของผู้ดูแล</p>
+      <div id="rp-status"></div>
+      <div class="field"><label><input type="checkbox" id="rp-daily" style="width:auto"> ส่งสรุปประจำวัน</label>
+        <div class="hint">สรุปยอดสมัครใหม่ จำนวนคน ยอดเงิน สลิปที่รอตรวจ และรอบที่ใกล้ถึง</div></div>
+      <div class="field"><label>เวลาที่ส่งสรุป</label><select id="rp-hour"></select>
+        <div class="hint">เว็บต้องตื่นอยู่ตอนถึงเวลา ถ้าหลับอยู่จะส่งให้ทันทีที่ตื่นครั้งถัดไป</div></div>
+      <div class="field"><label><input type="checkbox" id="rp-notify" style="width:auto"> แจ้งเตือนทันทีเมื่อมีใบสมัครใหม่ / สลิปใหม่</label></div>
+      <div id="rp-msg"></div>
+      <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
+        <button class="btn btn-blue" onclick="reportNow()">📨 ส่งทดสอบตอนนี้</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveReportSettings()">บันทึก</button>
+      </div>
+      <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="unlinkOwner()">ยกเลิกการผูกบัญชีไลน์</button></div>
     </div>
   </div>
 
@@ -596,6 +618,48 @@
       const res = await fetch('/api/admin/payment-settings',{method:'POST',headers:H(),body:JSON.stringify(body)});
       if(res.ok){ document.getElementById('pay-save-msg').innerHTML='<div class="alert ok">บันทึกเรียบร้อย ✓</div>'; setTimeout(closeModal,900); }
       else { document.getElementById('pay-save-msg').innerHTML='<div class="alert err">บันทึกไม่สำเร็จ</div>'; }
+    }
+
+    // ----- รายงานเข้าไลน์แอดมิน -----
+    async function openReportSettings(){
+      const s = await (await fetch('/api/admin/report-settings', { headers: H() })).json();
+      const sel = document.getElementById('rp-hour');
+      if (!sel.options.length) for (let h = 0; h < 24; h++) sel.add(new Option(String(h).padStart(2,'0') + ':00 น.', h));
+      sel.value = String(s.reportHour);
+      document.getElementById('rp-daily').checked = s.dailyReportOn;
+      document.getElementById('rp-notify').checked = s.notifyOwnerOn;
+      document.getElementById('rp-msg').innerHTML = '';
+      const steps = [];
+      if (!s.lineReady) steps.push('ยังไม่ได้ตั้งค่า LINE — ต้องใส่ LINE_CHANNEL_ACCESS_TOKEN และ LINE_CHANNEL_SECRET ที่ Render ก่อน');
+      if (!s.ownerCodeSet) steps.push('ยังไม่ได้ตั้ง BB_OWNER_CODE ที่ Render — ตั้งเป็นคำลับสั้น ๆ แล้ว redeploy');
+      if (!s.ownerLinked) steps.push('ยังไม่ได้ผูกบัญชี — แอดเพื่อน LINE OA ของร้าน แล้วพิมพ์ในแชทว่า <b>ผูกแอดมิน คำลับ</b>');
+      document.getElementById('rp-status').innerHTML = steps.length
+        ? '<div class="alert warn">ยังส่งไม่ได้ เพราะ<br>· ' + steps.join('<br>· ') + '</div>'
+        : '<div class="alert ok">ผูกบัญชีแล้ว พร้อมส่ง ✓' + (s.lastReportDate ? ' · สรุปล่าสุด ' + s.lastReportDate : ' · ยังไม่เคยส่งสรุป') + '</div>';
+      document.getElementById('report-modal').classList.add('open');
+    }
+    async function saveReportSettings(){
+      const body = {
+        dailyReportOn: document.getElementById('rp-daily').checked,
+        notifyOwnerOn: document.getElementById('rp-notify').checked,
+        reportHour: Number(document.getElementById('rp-hour').value)
+      };
+      const res = await fetch('/api/admin/report-settings',{ method:'POST', headers:H(), body:JSON.stringify(body) });
+      document.getElementById('rp-msg').innerHTML = res.ok
+        ? '<div class="alert ok">บันทึกเรียบร้อย ✓</div>' : '<div class="alert err">บันทึกไม่สำเร็จ</div>';
+    }
+    async function reportNow(){
+      document.getElementById('rp-msg').innerHTML = '<div class="alert info">กำลังส่ง…</div>';
+      const res = await fetch('/api/admin/report-now',{ method:'POST', headers:H() });
+      const d = await res.json().catch(()=>({}));
+      document.getElementById('rp-msg').innerHTML = (res.ok && d.ok)
+        ? '<div class="alert ok">ส่งแล้ว ✓ เปิดไลน์ดูได้เลย</div>'
+        : '<div class="alert err">ส่งไม่สำเร็จ' + (d.error ? ' — ' + d.error : '') + '</div>';
+    }
+    async function unlinkOwner(){
+      if (!confirm('ยกเลิกการผูกบัญชีไลน์แอดมิน? จะหยุดส่งรายงานจนกว่าจะผูกใหม่')) return;
+      await fetch('/api/admin/report-settings',{ method:'POST', headers:H(), body:JSON.stringify({ unlinkOwner:true }) });
+      openReportSettings();
     }
 
     async function confirmReg(id) {
