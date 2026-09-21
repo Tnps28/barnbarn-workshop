@@ -31,3 +31,14 @@ export async function push(to, text) {
   if (!enabled() || !to) return false;
   try { return await call('push', { to, messages: [{ type: 'text', text }] }); } catch (e) { console.error('จองนวด:', e.message); return false; }
 }
+// การ์ดสวย (Flex) — f = { altText, contents }  ·  ถ้าส่ง flex ไม่ได้จะ fallback เป็นข้อความ altText
+export async function replyFlex(replyToken, f) {
+  if (!enabled() || !replyToken) return false;
+  try { return await call('reply', { replyToken, messages: [{ type: 'flex', altText: f.altText, contents: f.contents }] }); }
+  catch (e) { console.error('จองนวด flex:', e.message); return reply(replyToken, f.altText); }
+}
+export async function pushFlex(to, f) {
+  if (!enabled() || !to) return false;
+  try { return await call('push', { to, messages: [{ type: 'flex', altText: f.altText, contents: f.contents }] }); }
+  catch (e) { console.error('จองนวด flex:', e.message); return push(to, f.altText); }
+}
