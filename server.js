@@ -76,6 +76,13 @@ app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody =
 mountNuad(app, { listWorkshops: db.listWorkshops });
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ---------- ปลุกเว็บ: ให้ cron ยิงที่นี่ ตอบไวที่สุด ไม่แตะฐานข้อมูล ----------
+// แล้วค่อยเช็คงานตามเวลา (รายงานเข้าไลน์) เบื้องหลัง ไม่ให้ cron ต้องรอ
+app.get('/healthz', (req, res) => {
+  res.type('text/plain').send('ok');
+  setImmediate(() => runDueJobs().catch(() => {}));
+});
+
 // ---------- helpers ----------
 function requireAdmin(req, res, next) {
   const pass = req.get('x-admin-password') || req.query.pw;
@@ -324,10 +331,12 @@ app.post('/api/register', (req, res) => {
   let out = reg;
   const isFree = (Number(reg.amount) || 0) <= 0;
   if (isFree) {
-    out = db.updateRegistration(reg.id, { status: 'confirmed', paidNote: 'กิจกรรมฟรี (ไม่มีค่าใช้จ่าย)' }) || reg;
+    out = db.updateRegistration(reg.id, { status: 'confirmed', paidAt: new Date().toISOString(), paidNote: 'กิจกรรมฟรี (ไม่มีค่าใช้จ่าย)' }) || reg;
     sendConfirmationEmail(out, ws, round).catch(() => {});
   }
   res.json({ registration: out, workshop: { title: ws.title, location: ws.location }, round, free: isFree });
+
+  if (!TEST) notifyOwner(() => LINE.buildOwnerNewReg(out, ws, round));
 });
 
 // ---------- public: join waitlist (when a round is full) ----------
@@ -358,9 +367,13 @@ app.post('/api/register/:id/notify-paid', (req, res) => {
 
   // ถ้าลูกค้าผูกไลน์ไว้แล้ว ส่งข้อความรับสลิปให้ทันที (ไม่ต้องรอแอดมิน)
   if (updated && updated.lineUserId && lineConfigured()) {
-    const ws = db.getWorkshop(updated.workshopId);
-    pushMessage(updated.lineUserId, LINE.buildSlipReceivedMessage(updated, ws, roundOf(ws, updated.roundId)))
+    const ws0 = db.getWorkshop(updated.workshopId);
+    pushMessage(updated.lineUserId, LINE.buildSlipReceivedMessage(updated, ws0, roundOf(ws0, updated.roundId)))
       .catch((e) => console.error('LINE slip ack:', e.message));
+  }
+  if (updated && !updated.isTest) {
+    const ws1 = db.getWorkshop(updated.workshopId);
+    notifyOwner(() => LINE.buildOwnerSlip(updated, ws1, roundOf(ws1, updated.roundId)));
   }
 });
 
@@ -409,7 +422,7 @@ app.get('/api/pay/status/:registrationId', async (req, res) => {
   }
   if (!reg.paymentRef) return res.json({ status: reg.status, paid: false });
   const charge = await getChargeStatus(reg.paymentRef);
-  if (charge.paid) db.updateRegistration(reg.id, { status: 'paid' });
+  if (charge.paid) db.updateRegistration(reg.id, { status: 'paid', paidAt: new Date().toISOString() });
   res.json({ status: charge.paid ? 'paid' : reg.status, paid: !!charge.paid });
 });
 
@@ -452,7 +465,7 @@ app.get('/api/admin/registrations', requireAdmin, (req, res) => {
 // admin marks a registration as paid manually (e.g. bank transfer verified)
 // -> auto-sends a confirmation email to the participant (if EMAIL_* configured & email present)
 app.post('/api/admin/registrations/:id/mark-paid', requireAdmin, async (req, res) => {
-  const reg = db.updateRegistration(req.params.id, { status: 'paid' });
+  const reg = db.updateRegistration(req.params.id, { status: 'paid', paidAt: new Date().toISOString() });
   if (!reg) return res.status(404).json({ error: 'not found' });
 
   let emailResult = { sent: false };
@@ -492,6 +505,7 @@ app.post('/api/admin/registrations/:id/confirm', requireAdmin, async (req, res) 
     : { sent: false, demo: true };
   db.updateRegistration(reg.id, {
     status: 'confirmed',
+    paidAt: new Date().toISOString(),
     confirmed: true,
     confirmationMessage: message,
     confirmationSentAt: new Date().toISOString(),
@@ -619,6 +633,16 @@ async function handleLineEvent(ev, req) {
   if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
 
   const text = String(ev.message.text || '');
+
+  // แอดมินผูกบัญชีตัวเองเพื่อรับรายงาน: พิมพ์  ผูกแอดมิน <รหัสลับ>
+  const OWNER_CODE = process.env.BB_OWNER_CODE || '';
+  const om = text.match(/^\s*ผูกแอดมิน\s+(\S+)\s*$/);
+  if (om) {
+    if (!OWNER_CODE || om[1] !== OWNER_CODE) return;   // รหัสผิด = เงียบ ไม่บอกใบ้
+    db.saveSettings({ ownerUserId: userId });
+    return LINE.reply(ev.replyToken, LINE.buildOwnerLinkedMessage());
+  }
+
   const m = text.match(/reg_[a-z0-9]+/i);
   if (!m) return; // ข้อความอื่น ๆ ปล่อยให้แอดมินตอบเองในแอป LINE OA
 
@@ -663,6 +687,36 @@ app.post('/api/admin/payment-settings', requireAdmin, (req, res) => {
     note: b.note ?? undefined
   });
   res.json(saved);
+});
+
+// ---------- admin: รายงานเข้าไลน์ ----------
+app.get('/api/admin/report-settings', requireAdmin, (req, res) => {
+  const s = db.getSettings();
+  res.json({
+    dailyReportOn: s.dailyReportOn !== false,
+    notifyOwnerOn: s.notifyOwnerOn !== false,
+    reportHour: Number.isFinite(Number(s.reportHour)) ? Number(s.reportHour) : 20,
+    ownerLinked: !!s.ownerUserId,
+    ownerCodeSet: !!process.env.BB_OWNER_CODE,
+    lineReady: lineConfigured(),
+    lastReportDate: s.lastReportDate || null
+  });
+});
+app.post('/api/admin/report-settings', requireAdmin, (req, res) => {
+  const b = req.body || {}, patch = {};
+  if (typeof b.dailyReportOn === 'boolean') patch.dailyReportOn = b.dailyReportOn;
+  if (typeof b.notifyOwnerOn === 'boolean') patch.notifyOwnerOn = b.notifyOwnerOn;
+  if (b.reportHour != null) patch.reportHour = Math.min(23, Math.max(0, Number(b.reportHour) || 20));
+  if (b.unlinkOwner === true) patch.ownerUserId = '';
+  db.saveSettings(patch);
+  res.json({ ok: true });
+});
+// ส่งรายงานทดสอบทันที
+app.post('/api/admin/report-now', requireAdmin, async (req, res) => {
+  const s = db.getSettings();
+  if (!s.ownerUserId) return res.status(400).json({ error: 'ยังไม่ได้ผูกบัญชีไลน์แอดมิน' });
+  const ok = await LINE.pushMessage(s.ownerUserId, LINE.buildDailyReport(todayReport()));
+  res.json({ ok });
 });
 
 // admin dashboard summary
@@ -797,6 +851,77 @@ app.get('/workshop', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/my', (req, res) => res.sendFile(path.join(__dirname, 'public', 'my.html')));
 app.get('/pricing', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pricing.html')));
 
+// ---------- แจ้งเตือนแอดมินทางไลน์ ----------
+function notifyOwner(build) {
+  try {
+    const s = db.getSettings();
+    if (s.notifyOwnerOn === false || !s.ownerUserId || !lineConfigured()) return;
+    LINE.pushMessage(s.ownerUserId, build()).catch((e) => console.error('แจ้งเตือนแอดมิน:', e.message));
+  } catch (e) { console.error('แจ้งเตือนแอดมิน:', e.message); }
+}
+
+// ---------- รายงานสรุปรายวัน ----------
+const bkkNow = () => {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(new Date());
+  const g = (t) => p.find((x) => x.type === t).value;
+  return { date: `${g('year')}-${g('month')}-${g('day')}`, hour: Number(g('hour')) % 24 };
+};
+const bkkDateOf = (iso) => {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); }
+  catch { return ''; }
+};
+
+function todayReport() {
+  db.expireStale();
+  const { date } = bkkNow();
+  const regs = db.listRegistrations().filter((r) => !r.isTest && r.status !== 'expired');
+  const todays = regs.filter((r) => bkkDateOf(r.createdAt) === date);
+  const paidToday = regs.filter((r) => (r.status === 'paid' || r.status === 'confirmed') && bkkDateOf(r.paidAt || r.confirmedAt || r.createdAt) === date);
+  const upcoming = [];
+  for (const w of db.listWorkshops({ onlyActive: true })) {
+    for (const r of (w.rounds || [])) {
+      if (String(r.date) < date) continue;
+      const taken = db.seatsTaken(w.id, r.id);
+      const cap = Number(r.seats || 0);
+      upcoming.push({ title: w.title, date: r.date, time: r.time || '', left: cap ? Math.max(0, cap - taken) : null });
+    }
+  }
+  upcoming.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return {
+    date,
+    newRegs: todays.length,
+    people: todays.reduce((n, r) => n + (Number(r.people) || 1), 0),
+    revenue: paidToday.reduce((n, r) => n + (Number(r.amount) || 0), 0),
+    pending: regs.filter((r) => r.status === 'pending_payment').length,
+    awaiting: regs.filter((r) => r.status === 'awaiting_verification').length,
+    confirmed: regs.filter((r) => r.status === 'confirmed').length,
+    upcoming: upcoming.slice(0, 3)
+  };
+}
+
+// เว็บบน Render ฟรีหลับได้ จึงไม่ยึดนาทีเป๊ะ ๆ — ตื่นเมื่อไหร่หลังเวลาที่ตั้ง ถ้ายังไม่ส่งของวันนี้ก็ส่งเลย
+let _jobRunning = false;
+async function runDueJobs() {
+  if (_jobRunning) return;
+  _jobRunning = true;
+  try {
+    const s = db.getSettings();
+    if (s.dailyReportOn === false || !s.ownerUserId || !lineConfigured()) return;
+    const { date, hour } = bkkNow();
+    const at = Number.isFinite(Number(s.reportHour)) ? Number(s.reportHour) : 20;
+    if (hour < at || s.lastReportDate === date) return;
+    db.saveSettings({ lastReportDate: date });          // กันส่งซ้ำก่อน แล้วค่อยส่ง
+    await LINE.pushMessage(s.ownerUserId, LINE.buildDailyReport(todayReport()));
+    console.log('ส่งรายงานประจำวันเข้าไลน์แล้ว ' + date);
+  } catch (e) {
+    console.error('รายงานประจำวัน:', e.message);
+  } finally {
+    _jobRunning = false;
+  }
+}
+setInterval(() => { runDueJobs().catch(() => {}); }, 60e3);
+
 db.init()
   .catch((e) => console.error('DB init error:', e.message))
   .finally(() => {
@@ -806,5 +931,7 @@ db.init()
       console.log(`   หน้าผู้ดูแล (admin):    http://localhost:${PORT}/admin`);
       console.log(`   LINE OA push:    ${lineConfigured() ? 'ready ✓' : 'manual mode (no token)'}`);
       console.log(`   LINE webhook:    ${LINE.canVerify() ? 'signature verified ✓' : 'no LINE_CHANNEL_SECRET (unverified)'}`);
+      console.log(`   ปลุกเว็บ (cron):  /healthz`);
+      runDueJobs().catch(() => {});
     });
   });
