@@ -149,3 +149,69 @@ export function buildNotFoundMessage() {
     'หรือพิมพ์มาบอกเราได้เลยค่ะ เดี๋ยวช่วยตรวจให้'
   ].join('\n');
 }
+
+// ---------- รายงานสรุปประจำวัน ส่งเข้าไลน์แอดมิน ----------
+const nf = (n) => Number(n || 0).toLocaleString('en-US');
+
+export function buildOwnerLinkedMessage() {
+  return [
+    '✅ ผูกบัญชีแอดมินเรียบร้อยแล้วค่ะ',
+    '',
+    'ตั้งแต่นี้ระบบจะส่งรายงานสรุปของวันมาที่แชทนี้',
+    'ปิดหรือเปลี่ยนเวลาส่งได้ที่หน้าผู้ดูแล → รายงานเข้าไลน์'
+  ].join('\n');
+}
+
+// r = { date, newRegs, people, revenue, awaiting, pending, confirmed, upcoming:[{title,date,time,left}] }
+export function buildDailyReport(r) {
+  const L = ['📊 สรุปวันนี้ · ' + r.date, ''];
+  L.push('สมัครใหม่  ' + nf(r.newRegs) + ' ใบ · ' + nf(r.people) + ' คน');
+  L.push('เงินเข้าวันนี้  ' + nf(r.revenue) + ' บาท');
+  L.push('');
+  L.push('ค้างอยู่ตอนนี้');
+  L.push('  • รอโอน        ' + nf(r.pending) + ' ใบ');
+  L.push('  • รอตรวจสลิป   ' + nf(r.awaiting) + ' ใบ');
+  L.push('  • ยืนยันแล้ว    ' + nf(r.confirmed) + ' ใบ');
+  if (r.upcoming && r.upcoming.length) {
+    L.push('');
+    L.push('รอบที่ใกล้ถึง');
+    for (const u of r.upcoming) {
+      L.push('  • ' + u.date + (u.time ? ' ' + u.time : '') + ' — ' + u.title
+        + (u.left == null ? '' : ' (เหลือ ' + nf(u.left) + ' ที่)'));
+    }
+  }
+  if (!r.newRegs && !r.revenue && !r.awaiting) {
+    L.push('');
+    L.push('วันนี้เงียบ ๆ พักได้นะคะ 🌿');
+  }
+  return L.join('\n');
+}
+
+// ---------- แจ้งเตือนแอดมินเมื่อมีออเดอร์ใหม่ / สลิปใหม่ ----------
+const roundLine = (round) => round ? [round.date, round.time].filter(Boolean).join(' ') : '';
+
+export function buildOwnerNewReg(reg, workshop, round) {
+  const L = ['🔔 มีใบสมัครใหม่', ''];
+  L.push(workshop ? workshop.title : '(ไม่พบเวิร์กช็อป)');
+  const r = roundLine(round); if (r) L.push('รอบ ' + r);
+  L.push('');
+  L.push(reg.name + (Number(reg.people) > 1 ? '  ·  ' + reg.people + ' คน' : ''));
+  L.push('โทร ' + (reg.phone || '-'));
+  L.push(Number(reg.amount) > 0 ? 'ยอด ' + nf(reg.amount) + ' บาท · รอโอน' : 'กิจกรรมฟรี · ยืนยันที่นั่งให้แล้ว');
+  L.push('');
+  L.push('รหัส ' + reg.id);
+  return L.join('\n');
+}
+
+export function buildOwnerSlip(reg, workshop, round) {
+  const L = ['💸 มีสลิปเข้ามาใหม่ รอตรวจ', ''];
+  L.push(workshop ? workshop.title : '(ไม่พบเวิร์กช็อป)');
+  const r = roundLine(round); if (r) L.push('รอบ ' + r);
+  L.push('');
+  L.push(reg.name + '  ·  ' + nf(reg.amount) + ' บาท');
+  L.push('โทร ' + (reg.phone || '-'));
+  if (reg.paidNote) L.push('หมายเหตุ: ' + reg.paidNote);
+  L.push('');
+  L.push('เปิดหน้าผู้ดูแลเพื่อกดยืนยัน · รหัส ' + reg.id);
+  return L.join('\n');
+}
