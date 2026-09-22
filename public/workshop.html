@@ -96,9 +96,10 @@
       const multi = !!WS.multiDay;
       const rounds = WS.rounds.map(r => {
         const full = r.remaining <= 0;
+        const only = WS.rounds.length === 1 && !full; // มีรอบเดียว: เลือกให้อัตโนมัติ ไม่ต้องกด
         const input = multi
-          ? `<input type="checkbox" name="day" value="${r.id}" data-price="${r.price}" ${full?'disabled':''} onchange="updateDayTotal()" style="width:auto">`
-          : `<input type="radio" name="round" value="${r.id}" ${full?'disabled':''} style="width:auto">`;
+          ? `<input type="checkbox" name="day" value="${r.id}" data-price="${r.price}" ${full?'disabled':''} ${only?'checked':''} onchange="updateDayTotal()" style="width:auto">`
+          : `<input type="radio" name="round" value="${r.id}" ${full?'disabled':''} ${only?'checked':''} style="width:auto">`;
         return `<div class="rowline" style="opacity:${full?.75:1}">
           <label class="k" style="cursor:${full?'not-allowed':'pointer'};display:flex;align-items:center;gap:8px">
             ${input}
@@ -154,6 +155,7 @@
             <div class="alert info mt">ที่นั่งมีจำนวนจำกัดต่อรอบ · ระบบจะกันที่นั่งให้เมื่อกรอกข้อมูลเสร็จ</div>
           </aside>
         </div>`;
+      if (multi) updateDayTotal(); // ถ้ามีวันเดียว (ติ๊กอัตโนมัติ) ให้ยอดรวมอัปเดตทันที
     }
 
     let FORM = null, ROUNDID = null, PEOPLE = 1, INFO_STEP = 0, PDPA_CONSENT = false, SELECTED_ROUNDS = [];
@@ -167,13 +169,16 @@
     }
     function toStep2() {
       let sel;
+      const avail = WS.rounds.filter(r => r.remaining > 0); // รอบที่ยังว่าง
       if (WS.multiDay) {
         sel = [...document.querySelectorAll('input[name=day]:checked')].map(c => c.value);
+        if (!sel.length && avail.length === 1) sel = [avail[0].id]; // มีวันเดียวที่ว่าง: เลือกให้อัตโนมัติ
         if (!sel.length) return alert('กรุณาเลือกอย่างน้อย 1 วันค่ะ');
       } else {
         const round = document.querySelector('input[name=round]:checked');
-        if (!round) return alert('กรุณาเลือกวันและรอบก่อนค่ะ');
-        sel = [round.value];
+        if (round) sel = [round.value];
+        else if (avail.length === 1) sel = [avail[0].id]; // มีรอบเดียวที่ว่าง: ไม่ต้องกดก็ไปต่อได้
+        else return alert('กรุณาเลือกวันและรอบก่อนค่ะ');
       }
       PDPA_CONSENT = !!document.getElementById('pdpa1')?.checked;
       if (!PDPA_CONSENT) return alert('กรุณาติ๊กยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล (PDPA) ก่อนค่ะ');
