@@ -740,7 +740,7 @@
 
   $("tkGrid").innerHTML = TK.map(function(r){
     return '<div class="tkrow"><span>' + esc(r[0]) +
-      ' <span class="lv">' + Number(r[2]).toLocaleString("en-US") + '\u0E3F+</span></span><b>' + r[1] + '</b></div>';
+      ' <span class="lv">' + Number(r[2]).toLocaleString("en-US") + '+</span></span><b>' + r[1] + '</b></div>';
   }).join("");
 
   $("careOpts").innerHTML = CARE.map(function(c){
