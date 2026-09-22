@@ -240,6 +240,7 @@
     .v-sum .v { font-size:19px; font-weight:800; color:var(--brown); font-variant-numeric:tabular-nums; }
     .v-feat .foot { margin:9px 0 0; font-size:12.5px; color:var(--ink-soft); line-height:1.55; }
     .w-price { display:block; margin-top:6px; font-size:13px; color:var(--brown); font-weight:700; }
+    .w-line { display:block; margin-top:3px; font-size:12.5px; color:var(--ink-soft); font-weight:700; }
     .v-nav { display:flex; align-items:center; gap:14px; }
     .v-count { color:var(--ink-soft); font-size:14px; font-weight:700; }
 
@@ -792,11 +793,13 @@
   }).join("");
 
   $("works").innerHTML = WORKS.map(function(w,i){
+    var sw = sumWork(w);
     return '<button type="button" class="work" data-w="' + i + '">' +
       '<span class="thumb" style="background:' + w.bg + '">' + w.ico + '</span>' +
       '<span class="wbody"><h3>' + esc(w.name) + '</h3>' +
       '<span class="w-what">' + esc(w.what) + '</span>' +
-      '<span class="w-price">ทำเว็บแบบนี้ ≈ ' + fmt(sumWork(w).total) + (sumWork(w).ask ? ' + งานเฉพาะทาง' : '') + '</span>' +
+      '<span class="w-price">ทำเว็บแบบนี้ ≈ ' + fmt(sw.web) + (sw.ask ? ' + งานเฉพาะทาง' : '') + '</span>' +
+      (sw.line ? '<span class="w-line">เว็บนี้เพิ่มไลน์ ' + esc(sw.lnName) + ' ด้วย · อีก ' + fmt(sw.line) + '</span>' : '') +
       '<span class="w-more">ดูหน้าในเว็บนี้ (' + w.pages.length + ' หน้า) →</span></span></button>';
   }).join("");
 
@@ -994,15 +997,20 @@
     });
     return { total:t, ask:ask, ext:ext };
   }
-  // ราคารวมทั้งเว็บ = ฐาน 2,000 + ฟีเจอร์ทุกหน้า
+  // ราคาเว็บ = ฐาน 2,000 + ฟีเจอร์ทุกหน้า
+  // บันไดไลน์คิดแยก ไม่รวมในเลขหน้าการ์ด เพราะเป็นของที่เลือกเพิ่มทีหลังได้ (ข้อ 4 ในหน้านี้)
   function sumWork(w){
     var t = P.base, ask = false, ext = false;
     w.pages.forEach(function(pg){
       var s = sumFeat(pg[4]);
       t += s.total; ask = ask || s.ask; ext = ext || s.ext;
     });
-    if (w.line){ t += lnPrice(w.line); ext = true; }
-    return { total:t, ask:ask, ext:ext };
+    var ln = 0, lnName = "";
+    if (w.line){
+      ln = lnPrice(w.line); ext = true;
+      for (var i = 0; i < LN.length; i++) if (LN[i].k === w.line) lnName = LN[i].t.replace(/ · .*$/, "");
+    }
+    return { web:t, line:ln, lnName:lnName, total:t + ln, ask:ask, ext:ext };
   }
 
   function renderFeat(list){
