@@ -10,6 +10,35 @@
     /* จัดเนื้อหาในตารางรายชื่อให้ชิดขอบบน แก้บรรทัดเหลื่อมกัน */
     #reg-body td { vertical-align: top; }
     .reg-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
+
+    /* ---------- เพื่อนบ้าน ---------- */
+    #nb-badge:not(:empty) { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 8px; font-size: 13px; margin-left: 2px; }
+    .nb-toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+    .nb-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .nb-tabs button { border: 1.5px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: 6px 13px; font-family: var(--font); font-weight: 700; font-size: 14px; cursor: pointer; }
+    .nb-tabs button.on { background: var(--brown); border-color: var(--brown); color: #fff; }
+    .nb-row { display: grid; grid-template-columns: 96px 1fr auto; gap: 14px; align-items: start; padding: 12px 4px; border-top: 1px dashed var(--line); }
+    .nb-row:first-child { border-top: none; }
+    .nb-th { width: 96px; height: 72px; border-radius: 10px; overflow: hidden; background: linear-gradient(135deg,#e4efd9,#fff3d6); display: grid; place-items: center; font-size: 32px; }
+    .nb-th img { width: 100%; height: 100%; object-fit: cover; }
+    .nb-info { font-size: 14px; color: var(--ink-soft); display: grid; gap: 2px; min-width: 0; }
+    .nb-info b { color: var(--brown); font-size: 16px; }
+    .nb-act { display: flex; flex-direction: column; gap: 6px; }
+    .pill.nb-pending { background: #fdeccb; color: var(--warn); }
+    .pill.nb-approved { background: #d7ecdd; color: var(--ok); }
+    .pill.nb-draft { background: var(--sky); color: var(--blue-deep); }
+    .pill.nb-off { background: #eee6db; color: var(--ink-soft); }
+    @media (max-width: 620px) { .nb-row { grid-template-columns: 72px 1fr; } .nb-th { width: 72px; height: 56px; } .nb-act { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; } }
+    .nb-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+    @media (max-width: 560px) { .nb-grid2 { grid-template-columns: 1fr; } }
+    .nb-m-photos { display: flex; gap: 10px; flex-wrap: wrap; }
+    .nb-m-photo { width: 150px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; font-size: 12.5px; }
+    .nb-m-photo img { width: 150px; height: 112px; object-fit: cover; }
+    .nb-m-photo div { display: flex; gap: 4px; padding: 6px; flex-wrap: wrap; }
+    .nb-voice { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #fbf1e2; border: 1px solid #e7b44a; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; font-size: 14px; }
+    .nb-voice audio { height: 34px; max-width: 100%; }
+    .nb-m-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .nb-reject { background: #fbe9e3; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -42,6 +71,7 @@
       <button class="btn btn-green" onclick="openReportSettings()">📊 รายงานเข้าไลน์</button>
       <button class="btn btn-blue" onclick="exportExcel()">⬇️ ดาวน์โหลด Excel</button>
       <button class="btn btn-green" onclick="openScanner()">📷 สแกนเช็คอิน</button>
+      <button class="btn btn-ghost" onclick="nbGo()" style="border-color:#6f9a5f;color:#3f6b33">🏡 เพื่อนบ้าน <span id="nb-badge"></span></button>
       <button class="btn btn-ghost" onclick="repairSeats()">🔧 ซ่อมข้อมูลที่นั่ง</button>
       <button class="btn btn-ghost" onclick="loadAll()">🔄 รีเฟรช</button>
     </div>
@@ -62,6 +92,7 @@
           <option value="cancelled">ยกเลิก</option>
           <option value="expired">หมดเวลา (ปล่อยที่นั่งแล้ว)</option>
         </select>
+        <span id="slip-quota" class="muted" style="font-size:12.5px;margin-left:auto"></span>
       </div>
       <table>
         <thead><tr><th>ผู้สมัคร</th><th>เวิร์กช็อป / รอบ</th><th>ยอด</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
@@ -75,6 +106,17 @@
         <thead><tr><th>ชื่อ</th><th>เบอร์โทร</th><th>เวิร์กช็อป / รอบ</th><th>วันที่ขอคิว</th><th></th></tr></thead>
         <tbody id="wait-body"></tbody>
       </table>
+    </div>
+
+    <!-- เพื่อนบ้าน บ้าน-บ้าน: กิจกรรมที่เพื่อนบ้านฝากมาทางไลน์ -->
+    <h2 class="section-title" id="neighbors" style="margin-top:36px;scroll-margin-top:70px">🏡 เพื่อนบ้าน บ้าน-บ้าน <span class="muted" style="font-weight:400;font-size:14px">— กิจกรรมที่เพื่อนบ้านฝากมาทางไลน์ ตรวจแล้วกดขึ้นเว็บ (ขึ้นใต้เวิร์กช็อปในหน้าแรก)</span></h2>
+    <div class="panel" id="nb-section" style="padding:14px">
+      <div class="nb-toolbar">
+        <div class="nb-tabs" id="nb-tabs"></div>
+        <button class="btn btn-primary btn-sm" onclick="nbOpen()">➕ เพิ่มกิจกรรมเอง</button>
+      </div>
+      <div id="nb-flash"></div>
+      <div id="nb-items"><p class="muted">กำลังโหลด…</p></div>
     </div>
   </main>
 
@@ -195,6 +237,60 @@
     </div>
   </div>
 
+  <!-- NEIGHBOR ACTIVITY MODAL (เพื่อนบ้าน) -->
+  <div class="modal-bg" id="nb-modal">
+    <div class="modal" style="max-width:720px">
+      <h3 id="nb-m-title">กิจกรรมเพื่อนบ้าน</h3>
+      <div id="nb-m-meta" class="hint" style="margin:-8px 0 12px"></div>
+      <div id="nb-m-voices"></div>
+      <div class="field"><label>รูป <span class="muted" style="font-weight:400">(รูปแรก = รูปบนการ์ด · สูงสุด 3 รูป)</span></label>
+        <div id="nb-m-photos" class="nb-m-photos"></div>
+        <label class="btn btn-ghost btn-sm" style="margin-top:6px;display:inline-flex">➕ เพิ่มรูป<input type="file" accept="image/*" onchange="nbAddPhoto(event)" style="display:none"></label>
+      </div>
+      <div class="field"><label>ชื่อกิจกรรม <span class="req">*</span></label><input id="nb-title" maxlength="120"></div>
+      <div class="nb-grid2">
+        <div class="field"><label>วันที่</label><input id="nb-date" type="date"></div>
+        <div class="field"><label>ถึงวันที่ <span class="muted" style="font-weight:400">(ถ้าจัดหลายวัน)</span></label><input id="nb-endDate" type="date"></div>
+      </div>
+      <div class="nb-grid2">
+        <div class="field"><label>จัดเป็นประจำ</label><input id="nb-repeatText" placeholder="เช่น ทุกวันเสาร์" maxlength="60"></div>
+        <div class="field"><label>วันแบบข้อความ</label><input id="nb-whenText" placeholder="เช่น วันพระ (ใช้เมื่อไม่มีวันที่)" maxlength="80"></div>
+      </div>
+      <div class="nb-grid2">
+        <div class="field"><label>เวลา</label><input id="nb-timeText" placeholder="เช่น 09:00 น. / ช่วงเช้า" maxlength="40"></div>
+        <div class="field"><label>ค่าใช้จ่าย</label><input id="nb-price" placeholder="ฟรี / 50 / ตามศรัทธา" maxlength="40"></div>
+      </div>
+      <div class="field"><label>สถานที่</label><input id="nb-placeName" maxlength="120"></div>
+      <div class="field"><label>ที่อยู่ / จุดสังเกต</label><input id="nb-placeAddress" maxlength="200"></div>
+      <div class="field"><label>ลิงก์แผนที่ <span class="muted" style="font-weight:400">(ไม่บังคับ — ถ้ามีหมุดจากไลน์ระบบทำลิงก์ให้เอง)</span></label><input id="nb-mapUrl" placeholder="https://maps.app.goo.gl/…"><div class="hint" id="nb-pin"></div></div>
+      <div class="nb-grid2">
+        <div class="field"><label>ผู้ติดต่อ</label><input id="nb-hostName" maxlength="60"></div>
+        <div class="field"><label>เบอร์โทร</label><input id="nb-phone" inputmode="numeric" maxlength="13">
+          <label style="font-weight:400;font-size:14px;margin-top:6px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="nb-showPhone" style="width:auto"> แสดงเบอร์บนเว็บ</label></div>
+      </div>
+      <div class="field"><label>รายละเอียด</label><textarea id="nb-details" maxlength="1500" style="min-height:90px"></textarea></div>
+      <div class="nb-grid2">
+        <div class="field"><label>แสดงบนเว็บถึงวันที่</label><input id="nb-showUntil" type="date"><div class="hint">ว่างไว้ได้ ระบบคิดให้เอง: ถึงวันจัด (หรือวันสุดท้าย) · จัดประจำ = ไม่หมดอายุ · ไม่รู้วัน = 30 วันหลังขึ้นเว็บ</div></div>
+        <div class="field"><label>อีโมจิบนการ์ด <span class="muted" style="font-weight:400">(ใช้เมื่อไม่มีรูป)</span></label><input id="nb-emoji" maxlength="8" placeholder="เช่น 🛒"></div>
+      </div>
+      <div class="field"><label>📌 โน้ตแอดมิน (เฉพาะแอดมินเห็น)</label><textarea id="nb-adminNote" maxlength="500" style="min-height:60px"></textarea></div>
+      <div id="nb-reject" class="nb-reject hidden">
+        <div class="field"><label>เหตุผลที่ไม่ผ่าน <span class="muted" style="font-weight:400">(ส่งให้ผู้ส่งทางไลน์ ถ้าเลือกแจ้ง)</span></label><textarea id="nb-rejectNote" maxlength="300" placeholder="เช่น เป็นการขายสินค้า ไม่ใช่กิจกรรมชุมชน"></textarea></div>
+        <label style="display:flex;gap:6px;align-items:center;font-size:14px;margin-bottom:10px"><input type="checkbox" id="nb-rejectNotify" style="width:auto" checked> แจ้งผู้ส่งทางไลน์ (ใช้โควตา 1 ข้อความ)</label>
+        <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="nbReject()">ยืนยันไม่ผ่าน</button>
+      </div>
+      <div id="nb-m-msg"></div>
+      <div class="nb-m-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
+        <button class="btn btn-blue" onclick="nbSave()">💾 บันทึก</button>
+        <button class="btn btn-green" id="nb-approve-btn" onclick="nbSave('approved')">✅ บันทึก + ขึ้นเว็บ</button>
+        <button class="btn btn-ghost" id="nb-hide-btn" onclick="nbSave('hidden')">🙈 ซ่อนจากเว็บ</button>
+        <button class="btn btn-ghost" id="nb-reject-btn" onclick="nbShowReject()" style="color:var(--danger);border-color:var(--danger)">❌ ไม่ผ่าน…</button>
+        <button class="btn btn-ghost" id="nb-del-btn" onclick="nbDelete()" style="color:var(--danger);border-color:transparent">🗑️ ลบ</button>
+      </div>
+    </div>
+  </div>
+
   <!-- QR CHECK-IN SCANNER MODAL -->
   <div class="modal-bg" id="scan-modal">
     <div class="modal">
@@ -244,7 +340,9 @@
       WORKSHOPS = await wRes.json();
       S = await sRes.json();
       await Promise.all([loadRegs(), loadWaitlist()]);
+      if (typeof loadNeighbors === 'function') loadNeighbors();   // เพื่อนบ้าน บ้าน-บ้าน (สคริปต์ท้ายหน้า)
       renderStats();
+      renderSlipQuota(S.slipQuota);
       renderStorage(S.storage);
       renderWorkshops();
       renderBanner();
@@ -252,6 +350,31 @@
       // auto-refresh every 60s so new slips/registrations appear without manual refresh
       if (!AUTO) AUTO = setInterval(loadAll, 60000);
     }
+    // โควตาตรวจสลิป SlipOK — แพ็กฟรี 100 ครั้ง/เดือน เกินจากนั้นเสียเงินครั้งละ 1 ฿
+    // เราตั้งไว้ไม่ให้เกินเด็ดขาด ครบแล้วระบบหยุดยิงเอง กลับไปตรวจมือ
+    function renderSlipQuota(q) {
+      const el = document.getElementById('slip-quota');
+      if (!el) return;
+      if (!q || !q.configured) { el.textContent = ''; return; }
+      const low = q.left <= 10;
+      el.innerHTML = '🧾 ตรวจสลิปอัตโนมัติรอบนี้ใช้ไป <b>' + q.used + '/' + q.cap + '</b> ครั้ง · เหลือ ' +
+        '<b style="color:' + (q.left === 0 ? 'var(--danger)' : low ? 'var(--warn)' : 'var(--green)') + '">' + q.left + '</b>' +
+        (q.left === 0 ? ' — ครบโควตาแล้ว ตรวจเองนะ' : '');
+    }
+
+    // ผลตรวจสลิปของใบสมัครหนึ่ง ๆ
+    function slipBadge(r) {
+      const c = r.slipCheck;
+      if (!c) return '';
+      const pill = (bg, fg, txt) => '<span style="display:inline-block;margin-top:3px;font-size:11.5px;padding:1px 7px;border-radius:6px;background:' + bg + ';color:' + fg + '">' + txt + '</span>';
+      const esc = (t) => String(t == null ? '' : t).replace(/[<>&]/g, (m) => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
+      const detail = c.note ? '<br><span class="muted" style="font-size:11.5px">' + esc(c.note) + '</span>' : '';
+      if (c.autoPaid) return '<br>' + pill('#e3f6e9', '#1d7a46', '🤖 สลิปผ่าน · ยอดตรง') + detail;
+      if (c.reason === 'quota_exhausted') return '<br>' + pill('#fff3d6', '#8a6212', '⏸ ไม่ได้ตรวจ (โควตาหมด)') + detail;
+      if (c.ok) return '<br>' + pill('#fff3d6', '#8a6212', '⚠️ สลิปจริง แต่ต้องดูก่อน') + detail;
+      return '<br>' + pill('#fdeee9', '#a33', '❌ สลิปไม่ผ่าน') + detail;
+    }
+
     const stat = (n,l,alert) => `<div class="stat" style="${alert?'border-color:var(--danger);background:#fdeee9':''}"><div class="n" style="${alert?'color:var(--danger)':''}">${n}${alert?' 🔴':''}</div><div class="l">${l}</div></div>`;
 
     // stats: use global summary, or compute for the focused workshop from loaded data
@@ -384,7 +507,7 @@
           <td>${r.isTest?'<span style="background:#ffe6e6;color:#a33;font-size:11px;padding:1px 6px;border-radius:6px;margin-right:4px">ทดสอบ</span>':''}<b>${r.name}</b>${r.nickname?` <span class="muted">(${r.nickname})</span>`:''}${r.age?` <span class="muted" style="font-size:12px">· ${r.age} ปี</span>`:''}<br><span class="muted">${r.phone}${r.lineId?' · '+r.lineId:''}${r.province?' · 📍'+r.province:''}</span>${(r.members&&r.members.length)?`<br><span style="font-size:12px;color:var(--brown)">👥 ผู้ร่วม: ${r.members.map(m=>m.name+(m.nickname?' ('+m.nickname+')':'')+(m.age?' '+m.age+'ปี':'')).join(', ')}</span>`:''}${r.allergy?`<br><span style="color:var(--danger);font-size:12px">🍽️ แพ้: ${r.allergy}</span>`:''}${r.foodAvoid?`<br><span style="color:var(--danger);font-size:12px">🚫 ไม่ทาน: ${r.foodAvoid}</span>`:''}${r.medical?`<br><span style="color:var(--warn);font-size:12px">💊 โรค: ${r.medical}</span>`:''}${r.emergencyPhone?`<br><span style="font-size:12px;color:var(--brown)">🆘 ฉุกเฉิน: ${r.emergencyName||''} (${r.emergencyRelation||'-'}) ${r.emergencyPhone}</span>`:''}${r.pdpaConsent?`<br><span style="font-size:12px;color:var(--green)">✓ ยินยอม PDPA</span>`:''}${r.note?`<br><span class="muted" style="font-size:12px">📝 ${r.note}</span>`:''}${r.adminNote?`<br><span style="font-size:12px;color:var(--brown);background:#fff3d6;padding:1px 7px;border-radius:6px;display:inline-block;margin-top:3px">📌 โน้ตแอดมิน: ${r.adminNote}</span>`:''}${r.source?`<br><span class="muted" style="font-size:12px">📣 รู้จักจาก: ${r.source}</span>`:''}</td>
           <td>${r.workshopTitle}<br><span class="muted">${(r.rounds&&r.rounds.length>1)?r.rounds.map(x=>fmtDate(x.date)).join(', ')+' ('+r.rounds.length+' วัน)':(r.round?fmtDate(r.round.date)+' '+r.round.time:'')} · ${r.people} ท่าน</span>${r.addons&&r.addons.length?`<br><span style="color:var(--blue);font-size:12px">➕ ${r.addons.map(a=>a.name+' (+'+money(a.price)+')').join(', ')}</span>`:''}<br><span class="muted" style="font-size:12px">🕒 สมัคร: ${fmtDT(r.createdAt)}${payLeft(r)}</span></td>
           <td>${r.amount>0 ? money(r.amount)+' ฿' : 'ฟรี'}</td>
-          <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}</td>
+          <td>${statusPill(r.status)}${r.slipImage?`<br><a href="#" onclick="viewSlip('${r.id}');return false" style="font-size:12px">📎 ดูสลิป</a>`:''}${slipBadge(r)}</td>
           <td>
             <div class="reg-actions">
             ${(r.status==='pending_payment'||r.status==='awaiting_verification')?`<button class="btn btn-yellow btn-sm" onclick="markPaid('${r.id}')">ยืนยันรับเงินแล้ว</button>`:''}
@@ -856,6 +979,307 @@
 
     const v = (id) => document.getElementById(id).value.trim();
     document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) closeModal(); }));
+  </script>
+
+  <script>
+    // ================= เพื่อนบ้าน บ้าน-บ้าน — กิจกรรมที่เพื่อนบ้านฝากมาทางไลน์ =================
+    // ใช้ PW / H() / closeModal() / v() / fmtDate() / fmtDT() / money() จากสคริปต์หลักด้านบน
+    let NB = { items: [], counts: {} }, NB_TAB = '', NB_CUR = null, NB_NEW_PHOTOS = [], NB_JUMPED = false;
+    const nbEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    const nbMedia = (id) => '/api/neighbors/media/' + encodeURIComponent(id);
+    const NB_TABS = [
+      ['pending', 'รอตรวจ', (x) => x.status === 'pending'],
+      ['live', 'ขึ้นเว็บอยู่', (x) => x.status === 'approved' && !x.ended],
+      ['draft', 'กำลังกรอกในไลน์', (x) => x.status === 'draft'],
+      ['ended', 'จบแล้ว', (x) => x.status === 'approved' && x.ended],
+      ['off', 'ซ่อน / ไม่ผ่าน', (x) => x.status === 'hidden' || x.status === 'rejected']
+    ];
+    const NB_EMPTY = { pending: 'ไม่มีรายการรอตรวจ 🎉', live: 'ยังไม่มีกิจกรรมเพื่อนบ้านบนเว็บ', draft: 'ตอนนี้ไม่มีใครกำลังกรอกในไลน์', ended: 'ยังไม่มีรายการที่จบแล้ว', off: 'ไม่มีรายการที่ซ่อนหรือไม่ผ่าน' };
+    const NB_STEP = { title: 'ชื่อกิจกรรม', when: 'วันที่', repeat: 'วันที่ (จัดประจำ)', time: 'เวลา', place: 'สถานที่', price: 'ค่าใช้จ่าย', priceAmount: 'ค่าใช้จ่าย',
+      contact: 'ผู้ติดต่อ', contactPhone: 'เบอร์โทร', photo: 'รูป', details: 'รายละเอียด', review: 'หน้าสรุป (ยังไม่กดส่ง)' };
+    const nbWhen = (n) => n.date ? fmtDate(n.date) + (n.endDate && n.endDate !== n.date ? ' – ' + fmtDate(n.endDate) : '') : (n.repeatText || n.whenText || '');
+    const nbPrice = (n) => n.priceText || (n.price === 0 ? 'ฟรี' : n.price > 0 ? money(n.price) + ' บาท' : '');
+    const nbTel = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3') : d.length === 9 ? d.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3') : d; };
+    const nbAgo = (iso) => {
+      if (!iso) return '';
+      const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      return m < 1 ? 'เมื่อกี้' : m < 60 ? m + ' นาทีที่แล้ว' : m < 1440 ? Math.round(m / 60) + ' ชม. ที่แล้ว' : Math.round(m / 1440) + ' วันที่แล้ว';
+    };
+
+    async function loadNeighbors() {
+      try {
+        const r = await fetch('/api/admin/neighbors', { headers: H() });
+        if (!r.ok) return;
+        NB = await r.json();
+      } catch { return; }
+      const c = NB.counts || {};
+      document.getElementById('nb-badge').textContent = c.pending ? String(c.pending) : '';
+      if (!NB_TAB) NB_TAB = c.pending ? 'pending' : 'live';
+      renderNeighborsAdmin();
+      // มาจากปุ่ม "เปิดหน้าแอดมิน" ในไลน์ → เลื่อนลงมาที่ส่วนนี้
+      if (!NB_JUMPED && location.hash === '#neighbors') { NB_JUMPED = true; setTimeout(nbGo, 200); }
+    }
+    function nbGo() { document.getElementById('neighbors').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    function nbFlash(html, kind = 'ok') {
+      const el = document.getElementById('nb-flash');
+      el.innerHTML = `<div class="alert ${kind}">${html}</div>`;
+      clearTimeout(nbFlash.t); nbFlash.t = setTimeout(() => { el.innerHTML = ''; }, 6000);
+    }
+    function renderNeighborsAdmin() {
+      const c = NB.counts || {};
+      document.getElementById('nb-tabs').innerHTML = NB_TABS.map(([k, label]) =>
+        `<button class="${k === NB_TAB ? 'on' : ''}" onclick="NB_TAB='${k}';renderNeighborsAdmin()">${label} (${c[k] || 0})</button>`).join('');
+      const f = (NB_TABS.find((t) => t[0] === NB_TAB) || NB_TABS[0])[2];
+      const list = (NB.items || []).filter(f);
+      document.getElementById('nb-items').innerHTML = list.map(nbRow).join('') || `<p class="muted center" style="padding:18px">${NB_EMPTY[NB_TAB] || ''}</p>`;
+    }
+    function nbStatusPill(n) {
+      if (n.status === 'pending') return '<span class="pill nb-pending">รอตรวจ</span>';
+      if (n.status === 'approved') return n.ended ? '<span class="pill nb-off">จบแล้ว</span>' : '<span class="pill nb-approved">ขึ้นเว็บอยู่</span>';
+      if (n.status === 'draft') return '<span class="pill nb-draft">กำลังกรอกในไลน์</span>';
+      if (n.status === 'rejected') return '<span class="pill cancelled">ไม่ผ่าน</span>';
+      return '<span class="pill nb-off">ซ่อนอยู่</span>';
+    }
+    function nbRow(n) {
+      const photo = (n.photos || [])[0];
+      const voices = (n.voices || []).length;
+      const title = n.title || (voices ? '🎤 ชื่อส่งมาเป็นเสียง — เปิดฟังแล้วพิมพ์' : '(ยังไม่มีชื่อ)');
+      const line1 = [nbWhen(n) && '📅 ' + nbWhen(n), n.timeText && '⏰ ' + n.timeText, n.placeName && '📍 ' + n.placeName, nbPrice(n) && '💰 ' + nbPrice(n)].filter(Boolean).join(' · ');
+      const line2 = [n.hostName && '👤 ' + n.hostName, n.phone && '📞 ' + nbTel(n.phone) + (n.showPhone === false ? ' (ไม่แสดงบนเว็บ)' : ''),
+        voices && '🎤 ' + voices + ' เสียง', (n.photos || []).length && '📷 ' + n.photos.length + ' รูป'].filter(Boolean).join(' · ');
+      const who = n.source === 'admin' ? 'แอดมินเพิ่มเอง' : 'ส่งโดย ' + (n.lineDisplayName || 'ผู้ใช้ไลน์');
+      const when = n.status === 'draft'
+        ? `ตอบถึง: ${NB_STEP[n.chat && n.chat.step] || '-'} · ล่าสุด ${nbAgo((n.chat && n.chat.lastAt) || n.updatedAt)}`
+        : [n.submittedAt ? 'ส่งเมื่อ ' + fmtDT(n.submittedAt) : '',
+           n.status === 'approved' && !n.ended ? (n.endsOn ? 'แสดงบนเว็บถึง ' + fmtDate(n.endsOn) : 'จัดประจำ แสดงไปเรื่อย ๆ') : ''].filter(Boolean).join(' · ');
+      const quick = n.status === 'pending' && n.title ? `<button class="btn btn-green btn-sm" onclick="nbQuickApprove('${n.id}')">✅ ขึ้นเว็บ</button>` : '';
+      return `<div class="nb-row">
+        <div class="nb-th">${photo ? `<img src="${nbMedia(photo.id)}" alt="" loading="lazy">` : nbEsc(n.emoji || '🏡')}</div>
+        <div class="nb-info">
+          <div><b>${nbEsc(title)}</b> ${nbStatusPill(n)}</div>
+          ${line1 ? `<div>${nbEsc(line1)}</div>` : ''}
+          ${line2 ? `<div>${nbEsc(line2)}</div>` : ''}
+          <div style="font-size:12.5px">${nbEsc(who)}${when ? ' · ' + nbEsc(when) : ''}${n.adminNote ? ' · 📌 ' + nbEsc(n.adminNote) : ''}</div>
+        </div>
+        <div class="nb-act">
+          <button class="btn btn-ghost btn-sm" onclick="nbOpen('${n.id}')">${n.status === 'pending' ? '🔎 ตรวจ / แก้' : '✏️ เปิดดู'}</button>
+          ${quick}
+        </div>
+      </div>`;
+    }
+
+    // ---------- หน้าต่างตรวจ/แก้ ----------
+    const NB_FIELDS = ['title', 'date', 'endDate', 'repeatText', 'whenText', 'timeText', 'placeName', 'placeAddress', 'mapUrl', 'hostName', 'phone', 'details', 'showUntil', 'emoji', 'adminNote'];
+    function nbMsg(text, kind = 'info') { document.getElementById('nb-m-msg').innerHTML = text ? `<div class="alert ${kind}">${nbEsc(text)}</div>` : ''; }
+    function nbOpen(id) {
+      NB_CUR = id ? (NB.items || []).find((x) => x.id === id) || null : null;
+      NB_NEW_PHOTOS = [];
+      const n = NB_CUR || { status: 'new', photos: [], voices: [], showPhone: true };
+      document.getElementById('nb-m-title').textContent = !NB_CUR ? '➕ เพิ่มกิจกรรมเพื่อนบ้านเอง' : n.status === 'pending' ? '🔎 ตรวจกิจกรรมเพื่อนบ้าน' : '✏️ กิจกรรมเพื่อนบ้าน';
+      const meta = !NB_CUR ? 'ใช้ตอนเพื่อนบ้านโทรมาเล่า หรือเดินมาบอกที่บ้าน-บ้าน' : [
+        n.source === 'admin' ? 'แอดมินเพิ่มเอง' : 'ส่งทางไลน์โดย ' + (n.lineDisplayName || 'ผู้ใช้ไลน์'),
+        n.submittedAt ? 'เมื่อ ' + fmtDT(n.submittedAt) : '',
+        n.consentAt ? 'ยินยอมให้เผยแพร่แล้ว ✓' : '',
+        n.status === 'approved' ? (n.ended ? 'จบแล้ว (ไม่แสดงบนเว็บ)' : 'ขึ้นเว็บอยู่' + (n.endsOn ? ' ถึง ' + fmtDate(n.endsOn) : ' (จัดประจำ ไม่หมดอายุ)')) : '',
+        n.status === 'rejected' && n.reviewNote ? 'ไม่ผ่าน: ' + n.reviewNote : ''
+      ].filter(Boolean).join(' · ');
+      document.getElementById('nb-m-meta').textContent = meta;
+      for (const k of NB_FIELDS) document.getElementById('nb-' + k).value = n[k] || '';
+      document.getElementById('nb-price').value = nbPrice(n);
+      document.getElementById('nb-showPhone').checked = n.showPhone !== false;
+      const hasPin = n.lat != null && n.lng != null;
+      document.getElementById('nb-pin').innerHTML = hasPin
+        ? `📍 มีหมุดจากไลน์ · <a href="https://www.google.com/maps/search/?api=1&query=${Number(n.lat).toFixed(6)},${Number(n.lng).toFixed(6)}" target="_blank" rel="noopener">เปิดดูในแผนที่</a>` : '';
+      document.getElementById('nb-m-voices').innerHTML = nbVoicesHtml(n);
+      nbRenderPhotos();
+      const st = n.status;
+      document.getElementById('nb-approve-btn').style.display = st === 'approved' && !n.ended ? 'none' : '';
+      document.getElementById('nb-approve-btn').textContent = st === 'approved' ? '✅ บันทึก + ขึ้นเว็บอีกครั้ง' : '✅ บันทึก + ขึ้นเว็บ';
+      document.getElementById('nb-hide-btn').style.display = st === 'approved' ? '' : 'none';
+      document.getElementById('nb-reject-btn').style.display = NB_CUR && st !== 'rejected' ? '' : 'none';
+      document.getElementById('nb-del-btn').style.display = NB_CUR ? '' : 'none';
+      document.getElementById('nb-reject').classList.add('hidden');
+      document.getElementById('nb-rejectNote').value = '';
+      document.getElementById('nb-rejectNotify').checked = !!(NB_CUR && NB_CUR.lineUserId);
+      document.getElementById('nb-rejectNotify').disabled = !(NB_CUR && NB_CUR.lineUserId);
+      nbMsg('');
+      document.getElementById('nb-modal').classList.add('open');
+    }
+    function nbVoicesHtml(n) {
+      const vs = n.voices || [];
+      if (!vs.length) return '';
+      return `<div class="field"><label>🎤 เสียงที่ส่งมา <span class="muted" style="font-weight:400">— ฟังแล้วพิมพ์ลงช่องด้านล่างได้เลย</span></label>` + vs.map((x) => {
+        const head = `<b>ตอบข้อ: ${nbEsc(NB_STEP[x.step] || x.step)}</b>${x.duration ? ' · ' + Math.max(1, Math.round(x.duration / 1000)) + ' วิ' : ''}`;
+        if (x.status === 'ready' && x.id) return `<div class="nb-voice">${head}<button class="btn btn-ghost btn-sm" onclick="nbPlay(this,'${nbEsc(x.id)}')">▶️ ฟัง</button></div>`;
+        if (x.status === 'failed') return `<div class="nb-voice">${head}<span style="color:var(--danger)">⚠️ โหลดจากไลน์ไม่สำเร็จ ระบบจะลองใหม่เมื่อเปิดหน้านี้อีกครั้ง</span></div>`;
+        return `<div class="nb-voice">${head}<span class="muted">⏳ กำลังโหลดจากไลน์…</span></div>`;
+      }).join('') + '</div>';
+    }
+    async function nbPlay(btn, id) {
+      btn.disabled = true; btn.textContent = 'กำลังโหลด…';
+      try {
+        const r = await fetch(nbMedia(id), { headers: H() });
+        if (!r.ok) throw new Error(r.status);
+        const a = document.createElement('audio');
+        a.controls = true; a.autoplay = true; a.src = URL.createObjectURL(await r.blob());
+        btn.replaceWith(a);
+      } catch (e) { btn.disabled = false; btn.textContent = '▶️ ลองอีกครั้ง'; }
+    }
+
+    // ---------- รูป ----------
+    function nbRenderPhotos() {
+      const ps = (NB_CUR && NB_CUR.photos) || [];
+      const pend = ((NB_CUR && NB_CUR.pendingPhotos) || []).length;
+      const html = ps.map((p, i) => `<div class="nb-m-photo">
+          <a href="${nbMedia(p.id)}" target="_blank" rel="noopener"><img src="${nbMedia(p.id)}" alt=""></a>
+          <div>${i === 0 ? '<span class="muted">⭐ รูปหลัก</span>' : `<button class="btn btn-ghost btn-sm" onclick="nbCover('${nbEsc(p.id)}')">⭐ ใช้เป็นรูปหลัก</button>`}
+          <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="nbDelPhoto('${nbEsc(p.id)}')">ลบ</button>
+          <span class="muted">${p.size ? Math.round(p.size / 1024) + ' KB' : ''}</span></div></div>`).join('')
+        + NB_NEW_PHOTOS.map((d, i) => `<div class="nb-m-photo"><img src="${d}" alt=""><div><span class="muted">รอบันทึก</span>
+          <button class="btn btn-ghost btn-sm" onclick="NB_NEW_PHOTOS.splice(${i},1);nbRenderPhotos()">ลบ</button></div></div>`).join('');
+      document.getElementById('nb-m-photos').innerHTML = (html || '<span class="muted">ยังไม่มีรูป</span>')
+        + (pend ? `<div class="hint" style="width:100%">⏳ มีรูปจากไลน์อีก ${pend} รูปที่ยังโหลดไม่สำเร็จ ระบบกำลังลองใหม่</div>` : '');
+    }
+    // ย่อรูปให้ด้านยาวไม่เกิน 1280px ก่อนเก็บ กันฐานข้อมูลฟรีเต็ม
+    function nbResize(blob, maxSide = 1280, q = 0.82) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const im = new Image();
+        im.onload = () => {
+          const sc = Math.min(1, maxSide / Math.max(im.width, im.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc);
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          resolve(c.toDataURL('image/jpeg', q));
+        };
+        im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('อ่านรูปไม่ได้')); };
+        im.src = url;
+      });
+    }
+    function nbKeep(item) {
+      if (!item || !item.id) return;
+      const i = (NB.items || []).findIndex((x) => x.id === item.id);
+      if (i >= 0) NB.items[i] = { ...NB.items[i], ...item, chat: NB.items[i].chat };
+      NB_CUR = i >= 0 ? NB.items[i] : item;
+    }
+    async function nbAddPhoto(e) {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      if (((NB_CUR && NB_CUR.photos) || []).length + NB_NEW_PHOTOS.length >= 3) return nbMsg('ใส่รูปได้สูงสุด 3 รูป', 'warn');
+      let data;
+      try { data = await nbResize(f); } catch (err) { return nbMsg(err.message, 'err'); }
+      if (!NB_CUR) { NB_NEW_PHOTOS.push(data); return nbRenderPhotos(); }
+      const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: data }) });
+      const d = await r.json();
+      if (!r.ok) return nbMsg(d.error || 'อัปรูปไม่สำเร็จ', 'err');
+      nbKeep(d); nbRenderPhotos();
+    }
+    async function nbCover(mid) {
+      const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/cover/${encodeURIComponent(mid)}`, { method: 'POST', headers: H() });
+      if (r.ok) { nbKeep(await r.json()); nbRenderPhotos(); }
+    }
+    async function nbDelPhoto(mid) {
+      if (!confirm('ลบรูปนี้?')) return;
+      const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/photo/${encodeURIComponent(mid)}`, { method: 'DELETE', headers: H() });
+      if (r.ok) { nbKeep(await r.json()); nbRenderPhotos(); }
+    }
+    // รูปจากไลน์ที่ใหญ่เกิน ย่อให้ตอนกดขึ้นเว็บ (หน้าเว็บจะโหลดไวขึ้น ฐานข้อมูลก็ไม่เต็ม)
+    async function nbShrink(item) {
+      for (const p of (item && item.photos) || []) {
+        if (!p.size || p.size <= 450 * 1024) continue;
+        try {
+          const blob = await (await fetch(nbMedia(p.id))).blob();
+          const data = await nbResize(blob);
+          await fetch(`/api/admin/neighbors/${item.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: data, replaceId: p.id }) });
+        } catch (e) { /* ย่อไม่ได้ก็ใช้รูปเดิม */ }
+      }
+    }
+
+    // ---------- บันทึก / เปลี่ยนสถานะ ----------
+    function nbCollect() {
+      const raw = v('nb-price');
+      const num = raw.replace(/[,\s]/g, '').replace(/(บาท|฿)$/, '');
+      let price = null, priceText = '';
+      if (/^\d+$/.test(num)) price = Number(num);
+      else if (raw) { priceText = raw; if (/ฟรี/.test(raw)) price = 0; }
+      const body = { price, priceText, showPhone: document.getElementById('nb-showPhone').checked };
+      for (const k of NB_FIELDS) body[k] = document.getElementById('nb-' + k).value.trim();
+      return body;
+    }
+    async function nbStatus(id, status, extra = {}) {
+      const r = await fetch(`/api/admin/neighbors/${id}/status`, { method: 'POST', headers: H(), body: JSON.stringify({ status, notify: true, ...extra }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'เปลี่ยนสถานะไม่สำเร็จ');
+      return d;
+    }
+    async function nbSave(status) {
+      const body = nbCollect();
+      if (!body.title && (status === 'approved' || !NB_CUR)) return nbMsg('ใส่ชื่อกิจกรรมก่อนนะ', 'warn');
+      nbMsg('กำลังบันทึก…', 'info');
+      try {
+        let item;
+        if (!NB_CUR) {
+          const r = await fetch('/api/admin/neighbors', { method: 'POST', headers: H(), body: JSON.stringify(body) });
+          item = await r.json();
+          if (!r.ok) throw new Error(item.error || 'บันทึกไม่สำเร็จ');
+          for (const img of NB_NEW_PHOTOS) {
+            const pr = await fetch(`/api/admin/neighbors/${item.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: img }) });
+            if (pr.ok) item = await pr.json();
+          }
+          NB_NEW_PHOTOS = [];
+        } else {
+          const r = await fetch('/api/admin/neighbors/' + NB_CUR.id, { method: 'PUT', headers: H(), body: JSON.stringify(body) });
+          item = await r.json();
+          if (!r.ok) throw new Error(item.error || 'บันทึกไม่สำเร็จ');
+        }
+        let msg = '💾 บันทึกแล้ว: ' + nbEsc(item.title || '');
+        if (status) {
+          const d = await nbStatus(item.id, status);
+          item = d.item;
+          if (status === 'approved') {
+            await nbShrink(item);
+            if (d.ended) {
+              msg = '⚠️ อนุมัติแล้ว แต่ยังไม่ขึ้นเว็บ เพราะวันจัดผ่านไปแล้ว (' + nbEsc(fmtDate(d.endsOn)) + ') — แก้วันที่ หรือช่อง “แสดงบนเว็บถึงวันที่” แล้วบันทึกอีกครั้ง';
+              NB_TAB = 'ended';
+            } else {
+              msg = '✅ ขึ้นเว็บแล้ว: ' + nbEsc(item.title) + (d.notified && d.notified.sent ? ' · แจ้งผู้ส่งทางไลน์แล้ว' : '') + ' · <a href="/#nb-' + nbEsc(item.id) + '" target="_blank">ดูบนหน้าเว็บ</a>';
+              NB_TAB = 'live';
+            }
+          } else if (status === 'hidden') { msg = '🙈 ซ่อนจากเว็บแล้ว: ' + nbEsc(item.title); }
+        }
+        closeModal();
+        await loadNeighbors();
+        nbFlash(msg, msg.startsWith('⚠️') ? 'warn' : 'ok');
+      } catch (e) { nbMsg(e.message, 'err'); }
+    }
+    function nbShowReject() { document.getElementById('nb-reject').classList.toggle('hidden'); }
+    async function nbReject() {
+      if (!NB_CUR) return;
+      try {
+        const d = await nbStatus(NB_CUR.id, 'rejected', { note: v('nb-rejectNote'), notify: document.getElementById('nb-rejectNotify').checked });
+        closeModal();
+        await loadNeighbors();
+        nbFlash('❌ ตั้งเป็นไม่ผ่านแล้ว' + (d.notified && d.notified.sent ? ' · แจ้งผู้ส่งทางไลน์แล้ว' : ''), 'warn');
+      } catch (e) { nbMsg(e.message, 'err'); }
+    }
+    async function nbDelete() {
+      if (!NB_CUR) return closeModal();
+      if (!confirm('ลบรายการนี้ถาวร? รูปและเสียงจะหายไปด้วย')) return;
+      await fetch('/api/admin/neighbors/' + NB_CUR.id, { method: 'DELETE', headers: H() });
+      closeModal();
+      await loadNeighbors();
+      nbFlash('🗑️ ลบแล้ว', 'info');
+    }
+    async function nbQuickApprove(id) {
+      try {
+        const d = await nbStatus(id, 'approved');
+        await nbShrink(d.item);
+        await loadNeighbors();
+        if (d.ended) return nbFlash('⚠️ อนุมัติแล้ว แต่ยังไม่ขึ้นเว็บ เพราะวันจัดผ่านไปแล้ว — เปิด ✏️ แก้วันที่ก่อน', 'warn');
+        nbFlash('✅ ขึ้นเว็บแล้ว: ' + nbEsc(d.item.title) + (d.notified && d.notified.sent ? ' · แจ้งผู้ส่งทางไลน์แล้ว' : '') + ' · <a href="/#nb-' + nbEsc(d.item.id) + '" target="_blank">ดูบนหน้าเว็บ</a>');
+      } catch (e) { nbFlash(nbEsc(e.message), 'err'); }
+    }
   </script>
 </body>
 </html>

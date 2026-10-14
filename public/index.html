@@ -20,6 +20,36 @@
     .cal-emojis{font-size:22px;line-height:1.25;margin-top:2px}
     .cal-cnt{font-size:10.5px;color:var(--brown);font-weight:700}
     @media(max-width:560px){.cal-cell{min-height:58px}.cal-emojis{font-size:17px}}
+
+    /* ---------- เพื่อนบ้าน บ้าน-บ้าน (กิจกรรมที่เพื่อนบ้านฝากประกาศ) ---------- */
+    #neighbors{padding-top:0;scroll-margin-top:70px}
+    .nb-sub{color:var(--ink-soft);margin:-12px 0 20px;font-size:15.5px}
+    .nb-en{display:inline-block;font-size:12.5px;color:var(--brown-soft);letter-spacing:.3px}
+    #nb-list{grid-template-columns:repeat(3,1fr)}
+    @media(max-width:820px){#nb-list{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:560px){#nb-list{grid-template-columns:1fr}}
+    .nb-card{scroll-margin-top:80px}
+    .nb-card .thumb{background:linear-gradient(135deg,#e4efd9,#fff3d6)}
+    .nb-card .thumb a{position:absolute;inset:0}
+    .nb-more-photos{position:absolute;right:10px;bottom:10px;background:rgba(58,47,39,.72);color:#fff;font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+    .nb-tag{background:#e3efdb;color:#3f6b33}
+    .nb-facts{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:6px;font-size:15.5px;color:var(--ink)}
+    .nb-facts li{display:grid;grid-template-columns:24px 1fr;gap:6px;align-items:start;line-height:1.45}
+    .nb-facts .k{text-align:center}
+    .nb-facts a{font-weight:700}
+    .nb-more summary{cursor:pointer;color:var(--blue);font-weight:700;font-size:15px;padding:4px 0}
+    .nb-more p{white-space:pre-line;margin:4px 0 0;font-size:15px;color:var(--ink-soft)}
+    .nb-photos{display:flex;gap:6px;margin-top:8px}
+    .nb-photos img{width:76px;height:57px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+    .nb-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .nb-actions .btn{flex:1 1 auto;font-size:15px}
+    .nb-card.flash{box-shadow:0 0 0 3px var(--green),var(--shadow)}
+    .nb-cta{margin-top:22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#eef5e8;border:1.5px dashed #9cc08c;border-radius:var(--radius);padding:18px 20px}
+    .nb-cta-icon{font-size:34px;line-height:1}
+    .nb-cta-text{flex:1 1 260px;display:flex;flex-direction:column;gap:3px;font-size:15.5px;color:var(--ink-soft)}
+    .nb-cta-text b{color:var(--brown);font-size:18px}
+    @media(max-width:560px){.nb-cta{padding:16px}.nb-cta .line-btn{width:100%;justify-content:center}
+      .nb-card .thumb.nophoto{aspect-ratio:auto;height:92px;font-size:42px}}
   </style>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
@@ -28,6 +58,7 @@
     <div class="brand"><span class="logo">🌿</span> BARNBARN</div>
     <div style="display:flex;gap:18px;align-items:center">
       <a class="plain" href="#calendar">📅 ปฏิทินกิจกรรม</a>
+      <a class="plain" href="#neighbors">🏡 เพื่อนบ้าน</a>
       <a class="plain" href="/my">📋 ดูการสมัครของฉัน</a>
       <a class="plain" href="/nuad">💆 จองนวดพี่หนึ่ง</a>
       <a class="plain" href="/pricing">💻 รับทำเว็บ</a>
@@ -52,6 +83,24 @@
     <h2 class="section-title">เวิร์กช็อปที่เปิดรับสมัคร</h2>
     <div id="list" class="grid"><p class="muted">กำลังโหลด…</p></div>
   </main>
+
+  <!-- เพื่อนบ้าน บ้าน-บ้าน: กิจกรรมที่เพื่อนบ้านฝากผ่านไลน์ แอดมินตรวจแล้วถึงขึ้น -->
+  <section class="wrap" id="neighbors">
+    <h2 class="section-title">🏡 เพื่อนบ้าน บ้าน-บ้าน</h2>
+    <p class="nb-sub">กิจกรรมดี ๆ จากเพื่อนบ้านรอบตัวเรา · บ้าน-บ้านช่วยประกาศให้ฟรี <span class="nb-en">· Barnbarn's Neighbors</span></p>
+    <div id="nb-list" class="grid"></div>
+    <div class="nb-cta">
+      <div class="nb-cta-icon">🏡</div>
+      <div class="nb-cta-text">
+        <b id="nb-cta-title">มีกิจกรรมอยากชวนเพื่อนบ้านไหม?</b>
+        <span>ส่งมาทางไลน์ได้เลย ระบบจะถามทีละข้อ กดปุ่มตอบได้ พิมพ์ไม่ถนัดก็อัดเสียงได้ ทีมงานตรวจแล้วขึ้นเว็บให้ฟรี</span>
+      </div>
+      <a class="line-btn" id="nb-cta-btn" href="https://lin.ee/TjK2193" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.5c-5.24 0-9.5 3.44-9.5 7.68 0 3.8 3.38 6.98 7.94 7.58.31.06.73.2.84.46.1.24.06.6.03.84l-.13.82c-.04.24-.19.95.83.52 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.52 2.04-3.07 2.04-4.79C21.5 6.94 17.24 3.5 12 3.5z"/></svg>
+        ฝากกิจกรรมทางไลน์
+      </a>
+    </div>
+  </section>
 
   <section class="wrap" id="calendar" style="scroll-margin-top:70px">
     <h2 class="section-title">📅 ปฏิทินกิจกรรม</h2>
@@ -106,15 +155,108 @@
     }
 
     async function load() {
-      const [items, calEvents] = await Promise.all([
+      const [items, calEvents, neighbors, cfg] = await Promise.all([
         fetch('/api/workshops').then(r => r.json()).catch(() => []),
-        fetch('/api/calendar').then(r => r.json()).catch(() => [])
+        fetch('/api/calendar').then(r => r.json()).catch(() => []),
+        fetch('/api/neighbors').then(r => r.json()).catch(() => []),
+        fetch('/api/config').then(r => r.json()).catch(() => ({}))
       ]);
       items.sort((a,b) => { const A=sortKey(a), B=sortKey(b); return A.cat-B.cat || (A.key<B.key?-1:A.key>B.key?1:0); });
       const el = document.getElementById('list');
       if (!items.length) el.innerHTML = '<p class="muted">ยังไม่มีกิจกรรมเปิดรับสมัครในขณะนี้</p>';
       else el.innerHTML = items.map(cardHtml).join('');
+      renderNeighbors(Array.isArray(neighbors) ? neighbors : [], cfg || {});
       buildCalendar(calEvents);
+      jumpToHash();
+    }
+
+    // ---------- เพื่อนบ้าน บ้าน-บ้าน ----------
+    // ข้อมูลส่วนนี้มาจากคนนอก (ผ่านไลน์) จึงต้อง escape ทุกช่องก่อนแสดง
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    let OA_ID = '';
+    const oaLink = (text) => OA_ID
+      ? `https://line.me/R/oaMessage/${encodeURIComponent(OA_ID)}/?${encodeURIComponent(text)}`
+      : 'https://lin.ee/TjK2193';
+    const nbPhoto = (id) => '/api/neighbors/media/' + encodeURIComponent(id);
+    function nbEmoji(n) {
+      if (n.emoji) return n.emoji;
+      const t = ((n.title || '') + ' ' + (n.details || '')).toLowerCase();
+      const map = [['ตลาด','🛒'],['ผัก','🥬'],['ทำบุญ','🙏'],['ตักบาตร','🙏'],['วัด','🛕'],['สวดมนต์','🙏'],['ปฏิบัติธรรม','🧘'],['แอโรบิก','💃'],['รำ','💃'],['เต้น','💃'],['ออกกำลัง','🏃'],['วิ่ง','🏃'],['โยคะ','🧘'],['ฟุตบอล','⚽'],['กีฬา','🏸'],['ปั่น','🚲'],['ขนม','🍡'],['อาหาร','🍲'],['ทำกับข้าว','🍳'],['กาแฟ','☕'],['ปลูก','🌱'],['ต้นไม้','🌳'],['สวน','🪴'],['ดอกไม้','💐'],['ดนตรี','🎵'],['เพลง','🎵'],['หนังสือ','📚'],['อ่าน','📚'],['เด็ก','🧒'],['ผู้สูงอายุ','👵'],['สุขภาพ','🩺'],['ตรวจ','🩺'],['อบรม','📝'],['สอน','📝'],['เรียน','📝'],['ประชุม','🗣️'],['จิตอาสา','🤝'],['ทำความสะอาด','🧹'],['ขยะ','♻️'],['ประมง','🎣'],['ตกปลา','🎣'],['ลอยกระทง','🪷'],['สงกรานต์','💦'],['งานบุญ','🎊'],['งานวัด','🎡'],['มัดย้อม','🎨'],['วาด','🎨'],['ถัก','🧶'],['เย็บ','🧵']];
+      for (const [k, e] of map) if (t.includes(k)) return e;
+      return '🏡';
+    }
+    function nbWhen(n) {
+      if (n.date) return fmtDate(n.date) + (n.endDate && n.endDate !== n.date ? ' – ' + fmtDate(n.endDate) : '');
+      return n.repeatText || n.whenText || '';
+    }
+    function nbPrice(n) {
+      if (n.priceText) return n.priceText;
+      if (n.price === 0) return 'ฟรี';
+      if (n.price > 0) return money(n.price) + ' บาท';
+      return '';
+    }
+    const nbTel = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3') : d.length === 9 ? d.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3') : d; };
+    function nbMap(n) {
+      if (/^https:\/\//.test(n.mapUrl || '')) return n.mapUrl;
+      const lat = Number(n.lat), lng = Number(n.lng);
+      if (n.lat != null && n.lng != null && isFinite(lat) && isFinite(lng)) return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
+      return '';
+    }
+    function nbCard(n) {
+      const photos = n.photos || [];
+      const when = [nbWhen(n), n.timeText].filter(Boolean).join(' · ');
+      const place = [n.placeName, n.placeAddress && n.placeAddress !== n.placeName ? n.placeAddress : ''].filter(Boolean).join(' · ');
+      const map = nbMap(n);
+      const price = nbPrice(n);
+      const id = esc(n.id);
+      const facts = [
+        when ? `<li><span class="k">📅</span><span>${esc(when)}</span></li>` : '',
+        place || map ? `<li><span class="k">📍</span><span>${esc(place || 'ดูในแผนที่')}</span></li>` : '',
+        price ? `<li><span class="k">💰</span><span>${esc(price)}</span></li>` : '',
+        n.hostName ? `<li><span class="k">👤</span><span>${esc(n.hostName)}</span></li>` : ''
+      ].join('');
+      const more = n.details || photos.length > 1
+        ? `<details class="nb-more"><summary>อ่านรายละเอียด</summary>${n.details ? `<p>${esc(n.details)}</p>` : ''}${photos.length > 1 ? `<div class="nb-photos">${photos.map((p) => `<a href="${nbPhoto(p)}" target="_blank" rel="noopener"><img src="${nbPhoto(p)}" alt="" loading="lazy"></a>`).join('')}</div>` : ''}</details>`
+        : '';
+      const call = n.phone
+        ? `<a class="btn btn-green btn-sm" href="tel:${esc(String(n.phone).replace(/\D/g, ''))}">📞 โทร ${esc(nbTel(n.phone))}</a>`
+        : `<a class="btn btn-ghost btn-sm" href="${esc(oaLink('สอบถามกิจกรรมเพื่อนบ้าน: ' + (n.title || '')))}" target="_blank" rel="noopener">💬 สอบถามทางไลน์</a>`;
+      return `
+        <article class="card nb-card" id="nb-${id}">
+          <div class="thumb${photos.length ? '' : ' nophoto'}">${photos.length
+            ? `<img src="${nbPhoto(photos[0])}" alt="" loading="lazy"><a href="${nbPhoto(photos[0])}" target="_blank" rel="noopener" aria-label="ดูรูปใหญ่"></a>${photos.length > 1 ? `<span class="nb-more-photos">+${photos.length - 1} รูป</span>` : ''}`
+            : esc(nbEmoji(n))}</div>
+          <div class="body">
+            <span class="tag nb-tag">🏡 เพื่อนบ้าน</span>
+            <h3>${esc(n.title)}</h3>
+            <ul class="nb-facts">${facts}</ul>
+            ${more}
+            <div class="foot nb-actions">${call}${map ? `<a class="btn btn-ghost btn-sm" href="${esc(map)}" target="_blank" rel="noopener">🗺️ ดูแผนที่</a>` : ''}</div>
+          </div>
+        </article>`;
+    }
+    function renderNeighbors(list, cfg) {
+      OA_ID = cfg.lineOaId || '';
+      document.getElementById('nb-cta-btn').href = oaLink('ฝากกิจกรรม');
+      const el = document.getElementById('nb-list');
+      if (!list.length) {
+        el.style.display = 'none';
+        document.getElementById('nb-cta-title').textContent = 'ยังไม่มีกิจกรรมจากเพื่อนบ้านตอนนี้ — มาเป็นคนแรกไหม?';
+        return;
+      }
+      el.style.display = '';
+      el.innerHTML = list.map(nbCard).join('');
+    }
+    // ลิงก์จากไลน์ (/#nb-xxx) — การ์ดสร้างทีหลังหน้าโหลด จึงต้องเลื่อนไปเองหลังวาดเสร็จ
+    function jumpToHash() {
+      const h = decodeURIComponent(location.hash || '');
+      if (!h.startsWith('#nb-') && h !== '#neighbors') return;
+      const target = document.getElementById(h.slice(1));
+      if (!target) return;
+      setTimeout(() => {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (h.startsWith('#nb-')) { target.classList.add('flash'); setTimeout(() => target.classList.remove('flash'), 2600); }
+      }, 120);
     }
 
     // ---------- อีโมจิสื่อความหมายของแต่ละกิจกรรม ----------
