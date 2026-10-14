@@ -39,6 +39,21 @@
     .nb-voice audio { height: 34px; max-width: 100%; }
     .nb-m-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
     .nb-reject { background: #fbe9e3; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+    .nb-m-photo.poster img { object-fit: contain; background: #f3ede2; }
+    .nb-wants { background: #eef5e8; border: 1.5px solid #9cc08c; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+    .nb-wants label { display: inline-flex; gap: 6px; align-items: center; margin: 4px 14px 4px 0; font-weight: 400; }
+    .nb-wants input { width: auto; }
+    .pill.nb-want { background: #eef5e8; color: #3f6b33; border: 1px solid #9cc08c; }
+    .nb-sticky { position: sticky; bottom: -24px; margin: 12px -24px -24px; padding: 10px 24px 14px; background: var(--paper); border-top: 1px solid var(--line); z-index: 2; }
+    .nb-sticky .nb-m-actions { margin-top: 0; }
+    .nb-dirty { background: #fdeccb; color: var(--warn); border-radius: 10px; padding: 8px 12px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    @media (max-width: 560px) { .nb-sticky { padding: 8px 24px 10px; } .nb-sticky .nb-m-actions .btn { padding: 9px 14px; font-size: 15px; } .nb-dirty { padding: 6px 10px; font-size: 13px; margin-bottom: 6px; } }
+    .nb-leave { background: #fff7e6; border: 1.5px solid #e7b44a; border-radius: 12px; padding: 12px; margin-bottom: 10px; font-size: 14px; }
+    .nb-leave b { display: block; margin-bottom: 8px; color: var(--warn); font-size: 15px; }
+    .nb-leave .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .nb-restore { background: var(--sky); color: var(--blue-deep); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    #nb-drafts:empty { display: none; }
+    #nb-drafts { margin-bottom: 10px; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -116,6 +131,7 @@
         <button class="btn btn-primary btn-sm" onclick="nbOpen()">➕ เพิ่มกิจกรรมเอง</button>
       </div>
       <div id="nb-flash"></div>
+      <div id="nb-drafts"></div>
       <div id="nb-items"><p class="muted">กำลังโหลด…</p></div>
     </div>
   </main>
@@ -242,10 +258,22 @@
     <div class="modal" style="max-width:720px">
       <h3 id="nb-m-title">กิจกรรมเพื่อนบ้าน</h3>
       <div id="nb-m-meta" class="hint" style="margin:-8px 0 12px"></div>
+      <div id="nb-restore"></div>
       <div id="nb-m-voices"></div>
-      <div class="field"><label>รูป <span class="muted" style="font-weight:400">(รูปแรก = รูปบนการ์ด · สูงสุด 3 รูป)</span></label>
+      <div class="nb-wants">
+        <b>🙋 ขอให้บ้าน-บ้านช่วย</b> <span class="muted">(ผู้ส่งเลือกในไลน์ · ไม่ขึ้นเว็บ)</span><br>
+        <label><input type="checkbox" id="nb-want-qr"> 📱 ทำ QR Code</label>
+        <label><input type="checkbox" id="nb-want-map"> 📍 ยิงหมุด Google Map</label>
+        <label><input type="checkbox" id="nb-want-register"> 📝 ระบบลงทะเบียน</label>
+        <div class="hint" id="nb-qr-links"></div>
+      </div>
+      <div class="field"><label>📄 ใบประกาศ <span class="muted" style="font-weight:400">(สูงสุด 2 รูป · ไม่มีรูปกิจกรรม จะใช้ใบประกาศเป็นรูปบนการ์ด)</span></label>
+        <div id="nb-m-posters" class="nb-m-photos"></div>
+        <label class="btn btn-ghost btn-sm" style="margin-top:6px;display:inline-flex">➕ เพิ่มใบประกาศ<input type="file" accept="image/*" onchange="nbAddPhoto(event,'poster')" style="display:none"></label>
+      </div>
+      <div class="field"><label>📷 รูปกิจกรรม <span class="muted" style="font-weight:400">(รูปแรก = รูปบนการ์ด · สูงสุด 3 รูป)</span></label>
         <div id="nb-m-photos" class="nb-m-photos"></div>
-        <label class="btn btn-ghost btn-sm" style="margin-top:6px;display:inline-flex">➕ เพิ่มรูป<input type="file" accept="image/*" onchange="nbAddPhoto(event)" style="display:none"></label>
+        <label class="btn btn-ghost btn-sm" style="margin-top:6px;display:inline-flex">➕ เพิ่มรูปกิจกรรม<input type="file" accept="image/*" onchange="nbAddPhoto(event,'photo')" style="display:none"></label>
       </div>
       <div class="field"><label>ชื่อกิจกรรม <span class="req">*</span></label><input id="nb-title" maxlength="120"></div>
       <div class="nb-grid2">
@@ -261,7 +289,7 @@
         <div class="field"><label>ค่าใช้จ่าย</label><input id="nb-price" placeholder="ฟรี / 50 / ตามศรัทธา" maxlength="40"></div>
       </div>
       <div class="field"><label>สถานที่</label><input id="nb-placeName" maxlength="120"></div>
-      <div class="field"><label>ที่อยู่ / จุดสังเกต</label><input id="nb-placeAddress" maxlength="200"></div>
+      <div class="field"><label>ที่อยู่ / จุดสังเกต</label><input id="nb-placeAddress" maxlength="200"><div class="hint" id="nb-addr-hint"></div></div>
       <div class="field"><label>ลิงก์แผนที่ <span class="muted" style="font-weight:400">(ไม่บังคับ — ถ้ามีหมุดจากไลน์ระบบทำลิงก์ให้เอง)</span></label><input id="nb-mapUrl" placeholder="https://maps.app.goo.gl/…"><div class="hint" id="nb-pin"></div></div>
       <div class="nb-grid2">
         <div class="field"><label>ผู้ติดต่อ</label><input id="nb-hostName" maxlength="60"></div>
@@ -279,14 +307,28 @@
         <label style="display:flex;gap:6px;align-items:center;font-size:14px;margin-bottom:10px"><input type="checkbox" id="nb-rejectNotify" style="width:auto" checked> แจ้งผู้ส่งทางไลน์ (ใช้โควตา 1 ข้อความ)</label>
         <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="nbReject()">ยืนยันไม่ผ่าน</button>
       </div>
-      <div id="nb-m-msg"></div>
       <div class="nb-m-actions">
-        <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
-        <button class="btn btn-blue" onclick="nbSave()">💾 บันทึก</button>
-        <button class="btn btn-green" id="nb-approve-btn" onclick="nbSave('approved')">✅ บันทึก + ขึ้นเว็บ</button>
         <button class="btn btn-ghost" id="nb-hide-btn" onclick="nbSave('hidden')">🙈 ซ่อนจากเว็บ</button>
         <button class="btn btn-ghost" id="nb-reject-btn" onclick="nbShowReject()" style="color:var(--danger);border-color:var(--danger)">❌ ไม่ผ่าน…</button>
         <button class="btn btn-ghost" id="nb-del-btn" onclick="nbDelete()" style="color:var(--danger);border-color:transparent">🗑️ ลบ</button>
+      </div>
+      <div class="nb-sticky">
+      <div id="nb-leave" class="nb-leave hidden">
+        <b>⚠️ ยังไม่ได้กดบันทึกที่แก้ไว้</b>
+        <div class="row-btns">
+          <button class="btn btn-blue btn-sm" onclick="nbSave()">💾 บันทึก แล้วปิด</button>
+          <button class="btn btn-ghost btn-sm" id="nb-keep-btn" onclick="nbCloseKeep()">ปิดไปก่อน (จำที่แก้ไว้ให้)</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="nbCloseDiscard()">ทิ้งที่แก้</button>
+          <button class="btn btn-ghost btn-sm" onclick="nbLeave(false)">↩️ กลับไปแก้ต่อ</button>
+        </div>
+      </div>
+      <div id="nb-dirty" class="nb-dirty hidden">✏️ แก้แล้วยังไม่ได้บันทึก — กด 💾 บันทึก ก่อนทำอย่างอื่นนะคะ</div>
+      <div id="nb-m-msg"></div>
+      <div class="nb-m-actions">
+        <button class="btn btn-ghost" onclick="nbClose()">ปิด</button>
+        <button class="btn btn-blue" onclick="nbSave()">💾 บันทึก</button>
+        <button class="btn btn-green" id="nb-approve-btn" onclick="nbSave('approved')">✅ บันทึก + ขึ้นเว็บ</button>
+      </div>
       </div>
     </div>
   </div>
@@ -978,7 +1020,11 @@
     }
 
     const v = (id) => document.getElementById(id).value.trim();
-    document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) closeModal(); }));
+    document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => {
+      if (e.target !== m) return;
+      if (m.id === 'nb-modal' && typeof nbClose === 'function') return nbClose();   // เพื่อนบ้าน: ถามก่อนถ้ายังไม่ได้บันทึก
+      closeModal();
+    }));
   </script>
 
   <script>
@@ -995,11 +1041,16 @@
       ['off', 'ซ่อน / ไม่ผ่าน', (x) => x.status === 'hidden' || x.status === 'rejected']
     ];
     const NB_EMPTY = { pending: 'ไม่มีรายการรอตรวจ 🎉', live: 'ยังไม่มีกิจกรรมเพื่อนบ้านบนเว็บ', draft: 'ตอนนี้ไม่มีใครกำลังกรอกในไลน์', ended: 'ยังไม่มีรายการที่จบแล้ว', off: 'ไม่มีรายการที่ซ่อนหรือไม่ผ่าน' };
-    const NB_STEP = { title: 'ชื่อกิจกรรม', when: 'วันที่', repeat: 'วันที่ (จัดประจำ)', time: 'เวลา', place: 'สถานที่', price: 'ค่าใช้จ่าย', priceAmount: 'ค่าใช้จ่าย',
-      contact: 'ผู้ติดต่อ', contactPhone: 'เบอร์โทร', photo: 'รูป', details: 'รายละเอียด', review: 'หน้าสรุป (ยังไม่กดส่ง)' };
+    const NB_STEP = { title: 'ชื่อกิจกรรม', when: 'วันที่', repeat: 'วันที่ (จัดประจำ)', time: 'เวลา', timeEnd: 'เวลาเลิก', place: 'สถานที่',
+      placeLink: 'ลิงก์แผนที่', placeName: 'ชื่อสถานที่', price: 'ค่าใช้จ่าย', priceAmount: 'ค่าใช้จ่าย', priceCustom: 'ค่าใช้จ่าย (พิมพ์เอง)',
+      contact: 'ผู้ติดต่อ', contactPhone: 'เบอร์โทร', poster: 'ใบประกาศ', photo: 'รูปกิจกรรม', details: 'รายละเอียด', help: 'ให้บ้าน-บ้านช่วย',
+      review: 'หน้าสรุป (ยังไม่กดส่ง)' };
+    const NB_WANTS = [['qr', '📱 QR Code'], ['map', '📍 ยิงหมุด Google Map'], ['register', '📝 ระบบลงทะเบียน']];
+    const NB_SLOT = { poster: { key: 'posters', pending: 'pendingPosters', max: 2, word: 'ใบประกาศ' }, photo: { key: 'photos', pending: 'pendingPhotos', max: 3, word: 'รูปกิจกรรม' } };
     const nbWhen = (n) => n.date ? fmtDate(n.date) + (n.endDate && n.endDate !== n.date ? ' – ' + fmtDate(n.endDate) : '') : (n.repeatText || n.whenText || '');
     const nbPrice = (n) => n.priceText || (n.price === 0 ? 'ฟรี' : n.price > 0 ? money(n.price) + ' บาท' : '');
     const nbTel = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3') : d.length === 9 ? d.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3') : d; };
+    const nbWantsText = (n) => (n.wants || []).map((k) => (NB_WANTS.find((w) => w[0] === k) || [k, k])[1]).join(' · ');
     const nbAgo = (iso) => {
       if (!iso) return '';
       const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -1016,6 +1067,7 @@
       document.getElementById('nb-badge').textContent = c.pending ? String(c.pending) : '';
       if (!NB_TAB) NB_TAB = c.pending ? 'pending' : 'live';
       renderNeighborsAdmin();
+      nbRenderDrafts();
       // มาจากปุ่ม "เปิดหน้าแอดมิน" ในไลน์ → เลื่อนลงมาที่ส่วนนี้
       if (!NB_JUMPED && location.hash === '#neighbors') { NB_JUMPED = true; setTimeout(nbGo, 200); }
     }
@@ -1041,24 +1093,26 @@
       return '<span class="pill nb-off">ซ่อนอยู่</span>';
     }
     function nbRow(n) {
-      const photo = (n.photos || [])[0];
+      const cover = (n.photos || [])[0] || (n.posters || [])[0];
       const voices = (n.voices || []).length;
       const title = n.title || (voices ? '🎤 ชื่อส่งมาเป็นเสียง — เปิดฟังแล้วพิมพ์' : '(ยังไม่มีชื่อ)');
       const line1 = [nbWhen(n) && '📅 ' + nbWhen(n), n.timeText && '⏰ ' + n.timeText, n.placeName && '📍 ' + n.placeName, nbPrice(n) && '💰 ' + nbPrice(n)].filter(Boolean).join(' · ');
       const line2 = [n.hostName && '👤 ' + n.hostName, n.phone && '📞 ' + nbTel(n.phone) + (n.showPhone === false ? ' (ไม่แสดงบนเว็บ)' : ''),
-        voices && '🎤 ' + voices + ' เสียง', (n.photos || []).length && '📷 ' + n.photos.length + ' รูป'].filter(Boolean).join(' · ');
+        voices && '🎤 ' + voices + ' เสียง', (n.posters || []).length && '📄 ใบประกาศ ' + n.posters.length, (n.photos || []).length && '📷 ' + n.photos.length + ' รูป'].filter(Boolean).join(' · ');
       const who = n.source === 'admin' ? 'แอดมินเพิ่มเอง' : 'ส่งโดย ' + (n.lineDisplayName || 'ผู้ใช้ไลน์');
       const when = n.status === 'draft'
         ? `ตอบถึง: ${NB_STEP[n.chat && n.chat.step] || '-'} · ล่าสุด ${nbAgo((n.chat && n.chat.lastAt) || n.updatedAt)}`
         : [n.submittedAt ? 'ส่งเมื่อ ' + fmtDT(n.submittedAt) : '',
            n.status === 'approved' && !n.ended ? (n.endsOn ? 'แสดงบนเว็บถึง ' + fmtDate(n.endsOn) : 'จัดประจำ แสดงไปเรื่อย ๆ') : ''].filter(Boolean).join(' · ');
       const quick = n.status === 'pending' && n.title ? `<button class="btn btn-green btn-sm" onclick="nbQuickApprove('${n.id}')">✅ ขึ้นเว็บ</button>` : '';
+      const wants = nbWantsText(n);
       return `<div class="nb-row">
-        <div class="nb-th">${photo ? `<img src="${nbMedia(photo.id)}" alt="" loading="lazy">` : nbEsc(n.emoji || '🏡')}</div>
+        <div class="nb-th">${cover ? `<img src="${nbMedia(cover.id)}" alt="" loading="lazy">` : nbEsc(n.emoji || '🏡')}</div>
         <div class="nb-info">
           <div><b>${nbEsc(title)}</b> ${nbStatusPill(n)}</div>
           ${line1 ? `<div>${nbEsc(line1)}</div>` : ''}
           ${line2 ? `<div>${nbEsc(line2)}</div>` : ''}
+          ${wants ? `<div><span class="pill nb-want">🙋 ขอให้ช่วย: ${nbEsc(wants)}</span></div>` : ''}
           <div style="font-size:12.5px">${nbEsc(who)}${when ? ' · ' + nbEsc(when) : ''}${n.adminNote ? ' · 📌 ' + nbEsc(n.adminNote) : ''}</div>
         </div>
         <div class="nb-act">
@@ -1071,10 +1125,16 @@
     // ---------- หน้าต่างตรวจ/แก้ ----------
     const NB_FIELDS = ['title', 'date', 'endDate', 'repeatText', 'whenText', 'timeText', 'placeName', 'placeAddress', 'mapUrl', 'hostName', 'phone', 'details', 'showUntil', 'emoji', 'adminNote'];
     function nbMsg(text, kind = 'info') { document.getElementById('nb-m-msg').innerHTML = text ? `<div class="alert ${kind}">${nbEsc(text)}</div>` : ''; }
+    function nbFill(n) {
+      for (const k of NB_FIELDS) document.getElementById('nb-' + k).value = n[k] || '';
+      document.getElementById('nb-price').value = nbPrice(n);
+      document.getElementById('nb-showPhone').checked = n.showPhone !== false;
+      for (const [k] of NB_WANTS) document.getElementById('nb-want-' + k).checked = (n.wants || []).includes(k);
+    }
     function nbOpen(id) {
       NB_CUR = id ? (NB.items || []).find((x) => x.id === id) || null : null;
       NB_NEW_PHOTOS = [];
-      const n = NB_CUR || { status: 'new', photos: [], voices: [], showPhone: true };
+      const n = NB_CUR || { status: 'new', photos: [], posters: [], voices: [], wants: [], showPhone: true };
       document.getElementById('nb-m-title').textContent = !NB_CUR ? '➕ เพิ่มกิจกรรมเพื่อนบ้านเอง' : n.status === 'pending' ? '🔎 ตรวจกิจกรรมเพื่อนบ้าน' : '✏️ กิจกรรมเพื่อนบ้าน';
       const meta = !NB_CUR ? 'ใช้ตอนเพื่อนบ้านโทรมาเล่า หรือเดินมาบอกที่บ้าน-บ้าน' : [
         n.source === 'admin' ? 'แอดมินเพิ่มเอง' : 'ส่งทางไลน์โดย ' + (n.lineDisplayName || 'ผู้ใช้ไลน์'),
@@ -1084,12 +1144,16 @@
         n.status === 'rejected' && n.reviewNote ? 'ไม่ผ่าน: ' + n.reviewNote : ''
       ].filter(Boolean).join(' · ');
       document.getElementById('nb-m-meta').textContent = meta;
-      for (const k of NB_FIELDS) document.getElementById('nb-' + k).value = n[k] || '';
-      document.getElementById('nb-price').value = nbPrice(n);
-      document.getElementById('nb-showPhone').checked = n.showPhone !== false;
+      nbFill(n);
       const hasPin = n.lat != null && n.lng != null;
       document.getElementById('nb-pin').innerHTML = hasPin
         ? `📍 มีหมุดจากไลน์ · <a href="https://www.google.com/maps/search/?api=1&query=${Number(n.lat).toFixed(6)},${Number(n.lng).toFixed(6)}" target="_blank" rel="noopener">เปิดดูในแผนที่</a>` : '';
+      document.getElementById('nb-addr-hint').textContent = n.addrSrc === 'osm' && n.placeAddress ? 'แปลงเป็นภาษาไทยจากหมุดแผนที่ (ข้อมูล OpenStreetMap) — แก้ได้ถ้าไม่ตรง' : '';
+      const qr = NB_CUR ? `/api/neighbors/qr/${encodeURIComponent(NB_CUR.id)}.png` : '';
+      document.getElementById('nb-qr-links').innerHTML = qr
+        ? `📱 QR Code ของกิจกรรมนี้ (สแกนแล้วเปิดการ์ดบนหน้าเว็บ): <a href="${qr}" target="_blank" rel="noopener">เปิดดู</a> · <a href="${qr}?dl=1">ดาวน์โหลด</a>`
+          + ((n.wants || []).includes('qr') && n.lineUserId ? '<br>ผู้ฝากขอ QR ไว้ — ตอนกด “ขึ้นเว็บ” ระบบส่ง QR ให้ทางไลน์เอง (รวมในข้อความเดียวกัน ไม่กินโควตาเพิ่ม)' : '')
+        : 'บันทึกก่อน แล้วจะมีลิงก์โหลด QR Code';
       document.getElementById('nb-m-voices').innerHTML = nbVoicesHtml(n);
       nbRenderPhotos();
       const st = n.status;
@@ -1104,6 +1168,7 @@
       document.getElementById('nb-rejectNotify').disabled = !(NB_CUR && NB_CUR.lineUserId);
       nbMsg('');
       document.getElementById('nb-modal').classList.add('open');
+      nbStartEditing();          // จำค่าตั้งต้น + กู้คืนที่แก้ค้างไว้ (ถ้ามี)
     }
     function nbVoicesHtml(n) {
       const vs = n.voices || [];
@@ -1126,21 +1191,33 @@
       } catch (e) { btn.disabled = false; btn.textContent = '▶️ ลองอีกครั้ง'; }
     }
 
-    // ---------- รูป ----------
-    function nbRenderPhotos() {
-      const ps = (NB_CUR && NB_CUR.photos) || [];
-      const pend = ((NB_CUR && NB_CUR.pendingPhotos) || []).length;
-      const html = ps.map((p, i) => `<div class="nb-m-photo">
+    // ---------- ใบประกาศ / รูปกิจกรรม ----------
+    function nbMediaCard(p, slot, i) {
+      const other = slot === 'poster' ? 'รูปกิจกรรม' : 'ใบประกาศ';
+      const main = slot === 'photo'
+        ? (i === 0 ? '<span class="muted">⭐ รูปหลัก</span>' : `<button class="btn btn-ghost btn-sm" onclick="nbCover('${nbEsc(p.id)}')">⭐ ใช้เป็นรูปหลัก</button>`)
+        : '';
+      return `<div class="nb-m-photo${slot === 'poster' ? ' poster' : ''}">
           <a href="${nbMedia(p.id)}" target="_blank" rel="noopener"><img src="${nbMedia(p.id)}" alt=""></a>
-          <div>${i === 0 ? '<span class="muted">⭐ รูปหลัก</span>' : `<button class="btn btn-ghost btn-sm" onclick="nbCover('${nbEsc(p.id)}')">⭐ ใช้เป็นรูปหลัก</button>`}
+          <div>${main}
+          <button class="btn btn-ghost btn-sm" onclick="nbMove('${nbEsc(p.id)}')">↔️ ย้ายไป${other}</button>
           <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="nbDelPhoto('${nbEsc(p.id)}')">ลบ</button>
-          <span class="muted">${p.size ? Math.round(p.size / 1024) + ' KB' : ''}</span></div></div>`).join('')
-        + NB_NEW_PHOTOS.map((d, i) => `<div class="nb-m-photo"><img src="${d}" alt=""><div><span class="muted">รอบันทึก</span>
-          <button class="btn btn-ghost btn-sm" onclick="NB_NEW_PHOTOS.splice(${i},1);nbRenderPhotos()">ลบ</button></div></div>`).join('');
-      document.getElementById('nb-m-photos').innerHTML = (html || '<span class="muted">ยังไม่มีรูป</span>')
-        + (pend ? `<div class="hint" style="width:100%">⏳ มีรูปจากไลน์อีก ${pend} รูปที่ยังโหลดไม่สำเร็จ ระบบกำลังลองใหม่</div>` : '');
+          <span class="muted">${p.size ? Math.round(p.size / 1024) + ' KB' : ''}</span></div></div>`;
     }
-    // ย่อรูปให้ด้านยาวไม่เกิน 1280px ก่อนเก็บ กันฐานข้อมูลฟรีเต็ม
+    function nbRenderPhotos() {
+      for (const slot of ['poster', 'photo']) {
+        const S = NB_SLOT[slot];
+        const ps = (NB_CUR && NB_CUR[S.key]) || [];
+        const pend = ((NB_CUR && NB_CUR[S.pending]) || []).length;
+        const fresh = NB_NEW_PHOTOS.map((d, i) => ({ d, i })).filter((x) => x.d.slot === slot);
+        const html = ps.map((p, i) => nbMediaCard(p, slot, i)).join('')
+          + fresh.map(({ d, i }) => `<div class="nb-m-photo${slot === 'poster' ? ' poster' : ''}"><img src="${d.data}" alt=""><div><span class="muted">รอบันทึก</span>
+            <button class="btn btn-ghost btn-sm" onclick="NB_NEW_PHOTOS.splice(${i},1);nbRenderPhotos();nbOnEdit()">ลบ</button></div></div>`).join('');
+        document.getElementById(slot === 'poster' ? 'nb-m-posters' : 'nb-m-photos').innerHTML = (html || `<span class="muted">${slot === 'poster' ? 'ไม่มีใบประกาศ' : 'ยังไม่มีรูป'}</span>`)
+          + (pend ? `<div class="hint" style="width:100%">⏳ มีรูปจากไลน์อีก ${pend} รูปที่ยังโหลดไม่สำเร็จ ระบบกำลังลองใหม่</div>` : '');
+      }
+    }
+    // ย่อรูปก่อนเก็บ กันฐานข้อมูลฟรีเต็ม (รูปกิจกรรมด้านยาว 1280px · ใบประกาศ 1600px ให้ตัวหนังสือยังอ่านออก)
     function nbResize(blob, maxSide = 1280, q = 0.82) {
       return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(blob);
@@ -1157,20 +1234,23 @@
         im.src = url;
       });
     }
+    const nbSize = (slot) => (slot === 'poster' ? [1600, 0.85] : [1280, 0.82]);
     function nbKeep(item) {
       if (!item || !item.id) return;
       const i = (NB.items || []).findIndex((x) => x.id === item.id);
       if (i >= 0) NB.items[i] = { ...NB.items[i], ...item, chat: NB.items[i].chat };
       NB_CUR = i >= 0 ? NB.items[i] : item;
     }
-    async function nbAddPhoto(e) {
+    async function nbAddPhoto(e, slot = 'photo') {
       const f = e.target.files[0]; e.target.value = '';
       if (!f) return;
-      if (((NB_CUR && NB_CUR.photos) || []).length + NB_NEW_PHOTOS.length >= 3) return nbMsg('ใส่รูปได้สูงสุด 3 รูป', 'warn');
+      const S = NB_SLOT[slot];
+      const have = ((NB_CUR && NB_CUR[S.key]) || []).length + NB_NEW_PHOTOS.filter((d) => d.slot === slot).length;
+      if (have >= S.max) return nbMsg(`${S.word}ใส่ได้สูงสุด ${S.max} รูป`, 'warn');
       let data;
-      try { data = await nbResize(f); } catch (err) { return nbMsg(err.message, 'err'); }
-      if (!NB_CUR) { NB_NEW_PHOTOS.push(data); return nbRenderPhotos(); }
-      const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: data }) });
+      try { data = await nbResize(f, ...nbSize(slot)); } catch (err) { return nbMsg(err.message, 'err'); }
+      if (!NB_CUR) { NB_NEW_PHOTOS.push({ slot, data }); nbRenderPhotos(); return nbOnEdit(); }
+      const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: data, slot }) });
       const d = await r.json();
       if (!r.ok) return nbMsg(d.error || 'อัปรูปไม่สำเร็จ', 'err');
       nbKeep(d); nbRenderPhotos();
@@ -1179,6 +1259,12 @@
       const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/cover/${encodeURIComponent(mid)}`, { method: 'POST', headers: H() });
       if (r.ok) { nbKeep(await r.json()); nbRenderPhotos(); }
     }
+    async function nbMove(mid) {
+      const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/move/${encodeURIComponent(mid)}`, { method: 'POST', headers: H() });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return nbMsg(d.error || 'ย้ายรูปไม่สำเร็จ', 'err');
+      nbKeep(d); nbRenderPhotos();
+    }
     async function nbDelPhoto(mid) {
       if (!confirm('ลบรูปนี้?')) return;
       const r = await fetch(`/api/admin/neighbors/${NB_CUR.id}/photo/${encodeURIComponent(mid)}`, { method: 'DELETE', headers: H() });
@@ -1186,14 +1272,152 @@
     }
     // รูปจากไลน์ที่ใหญ่เกิน ย่อให้ตอนกดขึ้นเว็บ (หน้าเว็บจะโหลดไวขึ้น ฐานข้อมูลก็ไม่เต็ม)
     async function nbShrink(item) {
-      for (const p of (item && item.photos) || []) {
-        if (!p.size || p.size <= 450 * 1024) continue;
+      const todo = [...((item && item.photos) || []).map((p) => [p, 'photo', 450]), ...((item && item.posters) || []).map((p) => [p, 'poster', 700])];
+      for (const [p, slot, kb] of todo) {
+        if (!p.size || p.size <= kb * 1024) continue;
         try {
           const blob = await (await fetch(nbMedia(p.id))).blob();
-          const data = await nbResize(blob);
+          const data = await nbResize(blob, ...nbSize(slot));
           await fetch(`/api/admin/neighbors/${item.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: data, replaceId: p.id }) });
         } catch (e) { /* ย่อไม่ได้ก็ใช้รูปเดิม */ }
       }
+    }
+
+    // ---------- กันที่แก้ไว้หาย ----------
+    // แก้แล้วยังไม่กดบันทึก → ขึ้นป้ายเตือนตรงปุ่มบันทึก + จำเฉพาะช่องที่แก้ไว้ในเครื่องนี้ทุกครั้งที่พิมพ์
+    // เผลอปิดหน้าต่าง / ออกไปดูหน้าอื่น / มือถือรีโหลดหน้าเอง → เปิดรายการเดิมอีกครั้ง ระบบกู้คืนให้
+    // กู้คืนเฉพาะช่องที่ค่าบนระบบยังเหมือนตอนเริ่มแก้ (ช่องที่มีคนแก้บนระบบไปแล้ว ใช้ค่าบนระบบ ไม่ทับ)
+    let NB_BASE = {}, NB_DIRTY = false;           // NB_BASE = ค่าในฟอร์มตอนเปิด (ตรงกับข้อมูลบนระบบ)
+    const NB_DRAFT_PREFIX = 'nb-edit:';
+    const nbDraftKey = (id) => NB_DRAFT_PREFIX + (id || 'new');
+    const nbCurKey = () => (NB_CUR ? NB_CUR.id : 'new');
+    const nbFormIds = () => [...NB_FIELDS.map((k) => 'nb-' + k), 'nb-price', 'nb-showPhone', ...NB_WANTS.map(([k]) => 'nb-want-' + k)];
+    const NB_FIELD_LABEL = { 'nb-title': 'ชื่อกิจกรรม', 'nb-date': 'วันที่', 'nb-endDate': 'ถึงวันที่', 'nb-repeatText': 'จัดเป็นประจำ', 'nb-whenText': 'วันแบบข้อความ',
+      'nb-timeText': 'เวลา', 'nb-placeName': 'สถานที่', 'nb-placeAddress': 'ที่อยู่', 'nb-mapUrl': 'ลิงก์แผนที่', 'nb-hostName': 'ผู้ติดต่อ', 'nb-phone': 'เบอร์โทร',
+      'nb-details': 'รายละเอียด', 'nb-showUntil': 'แสดงบนเว็บถึงวันที่', 'nb-emoji': 'อีโมจิ', 'nb-adminNote': 'โน้ตแอดมิน', 'nb-price': 'ค่าใช้จ่าย',
+      'nb-showPhone': 'แสดงเบอร์บนเว็บ', 'nb-want-qr': 'ขอ QR Code', 'nb-want-map': 'ขอยิงหมุด', 'nb-want-register': 'ขอระบบลงทะเบียน' };
+    function nbFormRaw() {
+      const o = {};
+      for (const id of nbFormIds()) { const el = document.getElementById(id); o[id] = el.type === 'checkbox' ? el.checked : el.value; }
+      return o;
+    }
+    function nbSetField(id, val) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.type === 'checkbox') el.checked = !!val; else el.value = val;
+    }
+    // ช่องที่แก้ไปจากตอนเปิด { id: ค่าใหม่ }
+    function nbChanges() {
+      const now = nbFormRaw(), out = {};
+      for (const id of Object.keys(now)) if (now[id] !== NB_BASE[id]) out[id] = now[id];
+      return out;
+    }
+    function nbReadDraft(id) {
+      try {
+        const d = JSON.parse(localStorage.getItem(nbDraftKey(id)) || 'null');
+        if (d && d.changes && Date.now() - d.at < 7 * 864e5) return d;
+        localStorage.removeItem(nbDraftKey(id));
+      } catch { /* เครื่องนี้เก็บไม่ได้ ก็ทำงานต่อตามปกติ */ }
+      return null;
+    }
+    function nbDropDraft(id) { try { localStorage.removeItem(nbDraftKey(id)); } catch { /* ไม่เป็นไร */ } }
+    function nbSetDirty(on) {
+      NB_DIRTY = on;
+      document.getElementById('nb-dirty').classList.toggle('hidden', !on);
+      if (!on) nbLeave(false);
+    }
+    function nbStartEditing() {
+      NB_BASE = nbFormRaw();
+      nbSetDirty(false);
+      document.getElementById('nb-restore').innerHTML = '';
+      const d = nbReadDraft(nbCurKey());
+      if (!d) return;
+      const applied = [], skipped = [];
+      for (const [id, val] of Object.entries(d.changes)) {
+        if (!(id in NB_BASE) || NB_BASE[id] === val) continue;                 // ตรงกับบนระบบแล้ว
+        if (NB_BASE[id] === (d.base || {})[id]) { nbSetField(id, val); applied.push(id); }
+        else skipped.push(id);                                                  // มีคนแก้ช่องนี้บนระบบหลังจากนั้น
+      }
+      nbOnEdit(d.at);                 // จำใหม่ให้ตรงกับที่กู้ได้จริง (เวลาที่แก้ยังเป็นเวลาเดิม)
+      if (!applied.length && !skipped.length) return;
+      const show = (v) => (typeof v === 'boolean' ? (v ? 'ติ๊ก' : 'ไม่ติ๊ก') : (String(v).trim() ? '“' + String(v).slice(0, 40) + '”' : 'ว่าง'));
+      const names = (ids, withVal) => nbEsc(ids.map((id) => (NB_FIELD_LABEL[id] || id) + (withVal ? ' (ที่แก้ไว้: ' + show(d.changes[id]) + ')' : '')).join(', '));
+      const when = nbEsc(fmtDT(new Date(d.at).toISOString()));
+      document.getElementById('nb-restore').innerHTML = `<div class="nb-restore">${applied.length ? '↩️ ' : ''}<span style="flex:1 1 240px">`
+        + (applied.length ? `กู้คืนที่แก้ไว้เมื่อ ${when} (${names(applied)}) ซึ่งยังไม่ได้บันทึก — ตรวจแล้วกด 💾 บันทึก` : '')
+        + (skipped.length ? `${applied.length ? '<br>' : ''}⚠️ ไม่ได้กู้ ${names(skipped, true)} เพราะมีการแก้บนระบบหลังจากนั้น — ใช้ค่าบนระบบแทน` : '')
+        + `</span>${applied.length ? '<button class="btn btn-ghost btn-sm" onclick="nbDiscardDraft()">ทิ้งที่แก้ ใช้ข้อมูลเดิม</button>' : ''}</div>`;
+    }
+    function nbOnEdit(keepAt) {
+      if (!document.getElementById('nb-modal').classList.contains('open')) return;
+      const changes = nbChanges();
+      const n = Object.keys(changes).length;
+      nbSetDirty(n > 0 || (!NB_CUR && NB_NEW_PHOTOS.length > 0));
+      try {
+        if (n) {
+          const base = {};
+          for (const id of Object.keys(changes)) base[id] = NB_BASE[id];
+          localStorage.setItem(nbDraftKey(nbCurKey()), JSON.stringify({ at: typeof keepAt === 'number' ? keepAt : Date.now(), title: document.getElementById('nb-title').value || (NB_CUR && NB_CUR.title) || '', changes, base }));
+        } else nbDropDraft(nbCurKey());
+      } catch { /* เก็บไม่ได้ก็ยังมีป้ายเตือน */ }
+    }
+    document.getElementById('nb-modal').addEventListener('input', (e) => { if (!e.target.closest('#nb-reject')) nbOnEdit(); });
+    document.getElementById('nb-modal').addEventListener('change', (e) => { if (e.target.type !== 'file' && !e.target.closest('#nb-reject')) nbOnEdit(); });
+    window.addEventListener('beforeunload', (e) => {
+      if (NB_DIRTY && document.getElementById('nb-modal').classList.contains('open')) { e.preventDefault(); e.returnValue = ''; }
+    });
+    function nbLeave(show) {
+      const el = document.getElementById('nb-leave');
+      el.classList.toggle('hidden', !show);
+      if (show) {
+        document.getElementById('nb-keep-btn').textContent = !NB_CUR && NB_NEW_PHOTOS.length
+          ? 'ปิดไปก่อน (จำตัวหนังสือไว้ · รูปที่เพิ่งเพิ่มจะหาย)' : 'ปิดไปก่อน (จำที่แก้ไว้ให้)';
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+    // ปุ่ม "ปิด" / กดนอกหน้าต่าง
+    function nbClose() {
+      if (NB_DIRTY) return nbLeave(true);
+      closeModal();
+    }
+    function nbCloseKeep() {          // ปิดไปก่อน ที่แก้ยังจำไว้ในเครื่อง เปิดใหม่ระบบกู้คืนให้
+      nbOnEdit();
+      NB_DIRTY = false;
+      closeModal();
+      nbRenderDrafts();
+    }
+    function nbCloseDiscard() {
+      nbDropDraft(nbCurKey());
+      NB_NEW_PHOTOS = [];
+      nbSetDirty(false);
+      closeModal();
+      nbRenderDrafts();
+    }
+    function nbDiscardDraft() {
+      nbDropDraft(nbCurKey());
+      nbOpen(NB_CUR ? NB_CUR.id : '');
+    }
+    // แถบเตือนในรายการ: มีที่แก้ค้างไว้ยังไม่ได้บันทึก (เช่น มือถือรีโหลดหน้าเอง)
+    function nbRenderDrafts() {
+      const el = document.getElementById('nb-drafts');
+      if (!el) return;
+      const rows = [];
+      try {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(NB_DRAFT_PREFIX)) keys.push(k); }
+        for (const k of keys) {
+          const id = k.slice(NB_DRAFT_PREFIX.length);
+          const d = nbReadDraft(id);
+          if (!d) continue;
+          // ไม่อยู่ในรายการตอนนี้ = ไม่โชว์ แต่ไม่ลบทิ้ง (เผื่อระบบโหลดข้อมูลไม่ครบชั่วคราว) หมดอายุเองใน 7 วัน
+          if (id !== 'new' && !(NB.items || []).some((x) => x.id === id)) continue;
+          rows.push({ id, d });
+        }
+      } catch { /* เครื่องนี้ไม่มีที่เก็บ */ }
+      el.innerHTML = rows.map(({ id, d }) => `<div class="alert warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <span style="flex:1 1 240px">📝 แก้ไว้ยังไม่ได้บันทึก: <b>${nbEsc(d.title || (id === 'new' ? 'กิจกรรมที่เพิ่มเอง' : 'กิจกรรมเพื่อนบ้าน'))}</b> · เมื่อ ${nbEsc(fmtDT(new Date(d.at).toISOString()))}</span>
+        <button class="btn btn-blue btn-sm" onclick="nbOpen('${id === 'new' ? '' : nbEsc(id)}')">เปิดทำต่อ</button>
+        <button class="btn btn-ghost btn-sm" onclick="nbDropDraft('${nbEsc(id)}');nbRenderDrafts()">ทิ้ง</button></div>`).join('');
     }
 
     // ---------- บันทึก / เปลี่ยนสถานะ ----------
@@ -1205,6 +1429,7 @@
       else if (raw) { priceText = raw; if (/ฟรี/.test(raw)) price = 0; }
       const body = { price, priceText, showPhone: document.getElementById('nb-showPhone').checked };
       for (const k of NB_FIELDS) body[k] = document.getElementById('nb-' + k).value.trim();
+      body.wants = NB_WANTS.map(([k]) => k).filter((k) => document.getElementById('nb-want-' + k).checked);
       return body;
     }
     async function nbStatus(id, status, extra = {}) {
@@ -1213,26 +1438,47 @@
       if (!r.ok) throw new Error(d.error || 'เปลี่ยนสถานะไม่สำเร็จ');
       return d;
     }
+    // ส่งเฉพาะช่องที่แก้ — ช่องอื่นที่เปลี่ยนบนระบบระหว่างเปิดหน้าต่างอยู่ (เช่น ผู้ส่งยังตอบในไลน์) จะไม่ถูกทับด้วยค่าเก่า
+    function nbChangedBody() {
+      const ch = nbChanges(), full = nbCollect(), body = {};
+      for (const k of NB_FIELDS) if (('nb-' + k) in ch) body[k] = full[k];
+      if ('nb-price' in ch) { body.price = full.price; body.priceText = full.priceText; }
+      if ('nb-showPhone' in ch) body.showPhone = full.showPhone;
+      if (NB_WANTS.some(([k]) => ('nb-want-' + k) in ch)) body.wants = full.wants;
+      return body;
+    }
     async function nbSave(status) {
-      const body = nbCollect();
-      if (!body.title && (status === 'approved' || !NB_CUR)) return nbMsg('ใส่ชื่อกิจกรรมก่อนนะ', 'warn');
+      const full = nbCollect();
+      if (!full.title && (status === 'approved' || !NB_CUR)) return nbMsg('ใส่ชื่อกิจกรรมก่อนนะ', 'warn');
+      nbLeave(false);
       nbMsg('กำลังบันทึก…', 'info');
       try {
         let item;
         if (!NB_CUR) {
-          const r = await fetch('/api/admin/neighbors', { method: 'POST', headers: H(), body: JSON.stringify(body) });
+          const r = await fetch('/api/admin/neighbors', { method: 'POST', headers: H(), body: JSON.stringify(full) });
           item = await r.json();
           if (!r.ok) throw new Error(item.error || 'บันทึกไม่สำเร็จ');
           for (const img of NB_NEW_PHOTOS) {
-            const pr = await fetch(`/api/admin/neighbors/${item.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: img }) });
+            const pr = await fetch(`/api/admin/neighbors/${item.id}/photo`, { method: 'POST', headers: H(), body: JSON.stringify({ image: img.data, slot: img.slot }) });
             if (pr.ok) item = await pr.json();
           }
           NB_NEW_PHOTOS = [];
+          nbDropDraft('new');
+          // สร้างแล้ว = ต่อจากนี้เป็นรายการที่มีอยู่ — ถ้าขั้นต่อไปพลาดแล้วกดบันทึกซ้ำ จะไม่สร้างรายการซ้ำ
+          NB.items = [item, ...(NB.items || [])];
+          NB_CUR = item;
         } else {
-          const r = await fetch('/api/admin/neighbors/' + NB_CUR.id, { method: 'PUT', headers: H(), body: JSON.stringify(body) });
-          item = await r.json();
-          if (!r.ok) throw new Error(item.error || 'บันทึกไม่สำเร็จ');
+          const body = nbChangedBody();
+          if (Object.keys(body).length) {
+            const r = await fetch('/api/admin/neighbors/' + NB_CUR.id, { method: 'PUT', headers: H(), body: JSON.stringify(body) });
+            item = await r.json();
+            if (!r.ok) throw new Error(item.error || 'บันทึกไม่สำเร็จ');
+            nbKeep(item);
+          } else item = NB_CUR;
+          nbDropDraft(NB_CUR.id);       // บันทึกแล้ว ไม่ต้องจำไว้อีก
         }
+        NB_BASE = nbFormRaw();
+        nbSetDirty(false);
         let msg = '💾 บันทึกแล้ว: ' + nbEsc(item.title || '');
         if (status) {
           const d = await nbStatus(item.id, status);
@@ -1251,13 +1497,14 @@
         closeModal();
         await loadNeighbors();
         nbFlash(msg, msg.startsWith('⚠️') ? 'warn' : 'ok');
-      } catch (e) { nbMsg(e.message, 'err'); }
+      } catch (e) { nbMsg(e.message + ' — ที่แก้ไว้ยังอยู่ ลองกดบันทึกอีกครั้ง', 'err'); }
     }
     function nbShowReject() { document.getElementById('nb-reject').classList.toggle('hidden'); }
     async function nbReject() {
       if (!NB_CUR) return;
       try {
         const d = await nbStatus(NB_CUR.id, 'rejected', { note: v('nb-rejectNote'), notify: document.getElementById('nb-rejectNotify').checked });
+        nbDropDraft(NB_CUR.id); nbSetDirty(false);
         closeModal();
         await loadNeighbors();
         nbFlash('❌ ตั้งเป็นไม่ผ่านแล้ว' + (d.notified && d.notified.sent ? ' · แจ้งผู้ส่งทางไลน์แล้ว' : ''), 'warn');
@@ -1267,6 +1514,7 @@
       if (!NB_CUR) return closeModal();
       if (!confirm('ลบรายการนี้ถาวร? รูปและเสียงจะหายไปด้วย')) return;
       await fetch('/api/admin/neighbors/' + NB_CUR.id, { method: 'DELETE', headers: H() });
+      nbDropDraft(NB_CUR.id); nbSetDirty(false);
       closeModal();
       await loadNeighbors();
       nbFlash('🗑️ ลบแล้ว', 'info');

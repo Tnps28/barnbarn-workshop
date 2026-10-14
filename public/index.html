@@ -31,6 +31,10 @@
     .nb-card{scroll-margin-top:80px}
     .nb-card .thumb{background:linear-gradient(135deg,#e4efd9,#fff3d6)}
     .nb-card .thumb a{position:absolute;inset:0}
+    .nb-card .thumb.poster{aspect-ratio:4/3;background:#f3ede2}
+    .nb-card .thumb.poster img{object-fit:contain}
+    .nb-osm{margin:10px 2px 0;font-size:12.5px;color:var(--ink-soft)}
+    .nb-osm a{color:inherit}
     .nb-more-photos{position:absolute;right:10px;bottom:10px;background:rgba(58,47,39,.72);color:#fff;font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px}
     .nb-tag{background:#e3efdb;color:#3f6b33}
     .nb-facts{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:6px;font-size:15.5px;color:var(--ink)}
@@ -89,6 +93,7 @@
     <h2 class="section-title">🏡 เพื่อนบ้าน บ้าน-บ้าน</h2>
     <p class="nb-sub">กิจกรรมดี ๆ จากเพื่อนบ้านรอบตัวเรา · บ้าน-บ้านช่วยประกาศให้ฟรี <span class="nb-en">· Barnbarn's Neighbors</span></p>
     <div id="nb-list" class="grid"></div>
+    <p class="nb-osm" id="nb-osm" hidden>ที่อยู่บางรายการแปลงจากหมุดแผนที่ด้วยข้อมูล © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">ผู้ร่วมพัฒนา OpenStreetMap</a></p>
     <div class="nb-cta">
       <div class="nb-cta-icon">🏡</div>
       <div class="nb-cta-text">
@@ -203,7 +208,9 @@
       return '';
     }
     function nbCard(n) {
-      const photos = n.photos || [];
+      const photos = n.photos || [], posters = n.posters || [];
+      const cover = photos[0] || posters[0];            // ไม่มีรูปกิจกรรม ใช้ใบประกาศเป็นรูปการ์ด (แสดงเต็มใบ ไม่ครอป)
+      const extra = photos.length ? photos.length - 1 : 0;
       const when = [nbWhen(n), n.timeText].filter(Boolean).join(' · ');
       const place = [n.placeName, n.placeAddress && n.placeAddress !== n.placeName ? n.placeAddress : ''].filter(Boolean).join(' · ');
       const map = nbMap(n);
@@ -213,7 +220,8 @@
         when ? `<li><span class="k">📅</span><span>${esc(when)}</span></li>` : '',
         place || map ? `<li><span class="k">📍</span><span>${esc(place || 'ดูในแผนที่')}</span></li>` : '',
         price ? `<li><span class="k">💰</span><span>${esc(price)}</span></li>` : '',
-        n.hostName ? `<li><span class="k">👤</span><span>${esc(n.hostName)}</span></li>` : ''
+        n.hostName ? `<li><span class="k">👤</span><span>${esc(n.hostName)}</span></li>` : '',
+        posters.length ? `<li><span class="k">📄</span><span>${posters.map((p, i) => `<a href="${nbPhoto(p)}" target="_blank" rel="noopener">${posters.length > 1 ? 'ใบประกาศ ' + (i + 1) : 'ดูใบประกาศ'}</a>`).join(' · ')}</span></li>` : ''
       ].join('');
       const more = n.details || photos.length > 1
         ? `<details class="nb-more"><summary>อ่านรายละเอียด</summary>${n.details ? `<p>${esc(n.details)}</p>` : ''}${photos.length > 1 ? `<div class="nb-photos">${photos.map((p) => `<a href="${nbPhoto(p)}" target="_blank" rel="noopener"><img src="${nbPhoto(p)}" alt="" loading="lazy"></a>`).join('')}</div>` : ''}</details>`
@@ -223,8 +231,8 @@
         : `<a class="btn btn-ghost btn-sm" href="${esc(oaLink('สอบถามกิจกรรมเพื่อนบ้าน: ' + (n.title || '')))}" target="_blank" rel="noopener">💬 สอบถามทางไลน์</a>`;
       return `
         <article class="card nb-card" id="nb-${id}">
-          <div class="thumb${photos.length ? '' : ' nophoto'}">${photos.length
-            ? `<img src="${nbPhoto(photos[0])}" alt="" loading="lazy"><a href="${nbPhoto(photos[0])}" target="_blank" rel="noopener" aria-label="ดูรูปใหญ่"></a>${photos.length > 1 ? `<span class="nb-more-photos">+${photos.length - 1} รูป</span>` : ''}`
+          <div class="thumb${cover ? (photos.length ? '' : ' poster') : ' nophoto'}">${cover
+            ? `<img src="${nbPhoto(cover)}" alt="" loading="lazy"><a href="${nbPhoto(cover)}" target="_blank" rel="noopener" aria-label="ดูรูปใหญ่"></a>${extra ? `<span class="nb-more-photos">+${extra} รูป</span>` : ''}`
             : esc(nbEmoji(n))}</div>
           <div class="body">
             <span class="tag nb-tag">🏡 เพื่อนบ้าน</span>
@@ -246,6 +254,7 @@
       }
       el.style.display = '';
       el.innerHTML = list.map(nbCard).join('');
+      document.getElementById('nb-osm').hidden = !list.some((n) => n.osm);   // เครดิตข้อมูลที่อยู่จาก OpenStreetMap
     }
     // ลิงก์จากไลน์ (/#nb-xxx) — การ์ดสร้างทีหลังหน้าโหลด จึงต้องเลื่อนไปเองหลังวาดเสร็จ
     function jumpToHash() {
