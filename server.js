@@ -17,7 +17,10 @@ import * as LINE from './services/line.js';
 import { qrPng } from './services/qr.js';
 import { pushMessage, buildConfirmationMessage, lineConfigured } from './services/line.js';
 import { sendConfirmationEmail, emailConfigured, sendOtpEmail } from './services/email.js';
+import { checkSlip, slipokConfigured } from './services/slipok.js';
 import { mountNuad } from './nuad/routes.js';
+import * as NEIGHBORS from './services/neighbors.js';
+import * as NBCHAT from './services/neighbor-chat.js';
 
 // --- load .env (tiny parser, no dependency) ---
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,6 +77,14 @@ const app = express();
 app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 // ---------- จองคิวนวดพี่หนึ่ง (/nuad) — โค้ดทั้งหมดอยู่ในโฟลเดอร์ nuad/ ----------
 mountNuad(app, { listWorkshops: db.listWorkshops });
+// ---------- เพื่อนบ้าน บ้าน-บ้าน — กิจกรรมที่เพื่อนบ้านฝากผ่านไลน์ (services/neighbors.js + neighbor-chat.js) ----------
+NEIGHBORS.mountNeighbors(app, {
+  requireAdmin,
+  isAdmin: (req) => (req.get('x-admin-password') || req.query.pw) === ADMIN_PASSWORD,
+  getSettings: () => db.getSettings(),
+  notify: NBCHAT.notifyStatus,
+  refreshMedia: NBCHAT.refreshMedia
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- ปลุกเว็บ: ให้ cron ยิงที่นี่ ตอบไวที่สุด ไม่แตะฐานข้อมูล ----------
@@ -352,8 +363,86 @@ app.post('/api/waitlist', (req, res) => {
   res.json({ ok: true, waitlist: w });
 });
 
+// ตัดใบสมัครเป็น "จ่ายแล้ว" + ส่งอีเมลยืนยัน — ใช้ร่วมกันระหว่างแอดมินกดเอง กับ SlipOK ตรวจผ่าน
+async function markPaidAndNotify(regId, note) {
+  const patch = { status: 'paid', paidAt: new Date().toISOString() };
+  if (note) patch.paidNote = note;
+  if (!db.updateRegistration(regId, patch)) return { reg: null, emailResult: { sent: false } };
+  let emailResult = { sent: false };
+  try {
+    const reg = db.getRegistration(regId);
+    const ws = db.getWorkshop(reg.workshopId);
+    emailResult = await sendConfirmationEmail(reg, ws, roundOf(ws, reg.roundId));
+    if (emailResult.sent) db.updateRegistration(regId, { confirmationEmailSentAt: new Date().toISOString() });
+  } catch (e) {
+    emailResult = { sent: false, error: String((e && e.message) || e) };
+  }
+  return { reg: db.getRegistration(regId), emailResult };
+}
+
+// ---------- ตรวจสลิปอัตโนมัติด้วย SlipOK ----------
+// ตัดเป็น "จ่ายแล้ว" ให้เองเฉพาะเมื่อครบ 3 ข้อ: สลิปจริง + ยอดตรงเป๊ะ + ไม่ใช่สลิปที่เคยใช้แล้ว
+// ขาดข้อไหนก็ค้างไว้ที่ awaiting_verification ให้แอดมินตัดสินเอง ไม่เดาแทน
+//
+// กติกาประหยัดโควตา (ฟรี 100 ครั้ง/เดือน): ยิงครั้งเดียวต่อใบสมัคร · ไม่ยิงใบทดสอบ ·
+// ไม่ยิงกิจกรรมฟรี · จองสิทธิ์จาก db.reserveSlipCheck() ก่อนเสมอ เต็มแล้วไม่ยิงเด็ดขาด
+async function autoVerifySlip(reg) {
+  const skip = (reason) => ({ ran: false, reason, slipCheck: null });
+  if (!slipokConfigured()) return skip('not_configured');
+  if (!reg || !reg.slipImage) return skip('no_slip');
+  if (reg.isTest) return skip('test_registration');
+  if (reg.slipCheck) return skip('already_checked');
+  const due = Number(reg.amount) || 0;
+  if (due <= 0) return skip('free_workshop');
+
+  const rsv = db.reserveSlipCheck();
+  if (!rsv.ok) {
+    const info = {
+      at: new Date().toISOString(), ok: false, autoPaid: false, reason: 'quota_exhausted',
+      quotaUsed: rsv.used, quotaCap: rsv.cap,
+      note: 'โควตาตรวจสลิปรอบ ' + rsv.period + ' ใช้ครบ ' + rsv.cap + ' ครั้งแล้ว — รอบนี้ไม่ตรวจเพิ่ม ตรวจเองนะ'
+    };
+    db.updateRegistration(reg.id, { slipCheck: info });
+    return { ran: false, reason: 'quota_exhausted', slipCheck: info, quota: rsv };
+  }
+
+  const r = await checkSlip(reg.slipImage);
+  const info = {
+    at: new Date().toISOString(),
+    ok: !!r.ok, reason: r.reason, message: r.message || '',
+    transRef: r.transRef || '', amount: Number(r.amount) || 0, expected: due,
+    senderName: r.senderName || '', sendingBank: r.sendingBank || '',
+    transTimestamp: r.transTimestamp || '',
+    quotaUsed: rsv.used, quotaCap: rsv.cap,
+    autoPaid: false, note: ''
+  };
+
+  if (!r.ok) {
+    info.note =
+      r.reason === 'invalid' ? 'SlipOK ตรวจแล้วไม่ผ่าน' + (r.message ? ' — ' + r.message : '')
+      : r.reason === 'auth' ? 'คีย์ SlipOK ไม่ถูกต้อง หรือโควตาฝั่ง SlipOK หมด'
+      : r.reason === 'timeout' || r.reason === 'network' ? 'ติดต่อ SlipOK ไม่ได้ ตรวจเองนะ'
+      : 'SlipOK ไม่รับสลิปใบนี้' + (r.message ? ' — ' + r.message : '');
+  } else {
+    const dup = db.findRegistrationBySlipRef(info.transRef, reg.id);
+    const amountOk = Math.round(info.amount * 100) === Math.round(due * 100);
+    if (dup) {
+      info.note = 'สลิปใบนี้เคยใช้กับใบสมัคร ' + dup.id + ' ไปแล้ว';
+    } else if (!amountOk) {
+      info.note = 'สลิปจริง แต่โอนมา ' + info.amount.toLocaleString('en-US') +
+        ' ฿ ไม่ตรงกับยอด ' + due.toLocaleString('en-US') + ' ฿';
+    } else {
+      info.autoPaid = true;
+      info.note = 'สลิปจริง ยอดตรง ตัดเป็นจ่ายแล้วให้อัตโนมัติ';
+    }
+  }
+
+  db.updateRegistration(reg.id, { slipCheck: info });
+  return { ran: true, slipCheck: info, quota: rsv };
+}
+
 // ---------- public: notify payment (upload slip) ----------
-app.post('/api/register/:id/notify-paid', (req, res) => {
+app.post('/api/register/:id/notify-paid', async (req, res) => {
   const reg = db.getRegistration(req.params.id);
   if (!reg) return res.status(404).json({ error: 'ไม่พบใบสมัคร' });
   const patch = {
@@ -362,14 +451,36 @@ app.post('/api/register/:id/notify-paid', (req, res) => {
     paidNote: (req.body && req.body.note) || ''
   };
   if (req.body && req.body.slipImage) patch.slipImage = req.body.slipImage;
-  const updated = db.updateRegistration(reg.id, patch);
-  res.json({ ok: true, registration: updated });
+  db.updateRegistration(reg.id, patch);
 
-  // ถ้าลูกค้าผูกไลน์ไว้แล้ว ส่งข้อความรับสลิปให้ทันที (ไม่ต้องรอแอดมิน)
+  // ตรวจสลิปก่อนตอบกลับ ลูกค้าจะได้รู้ผลทันทีไม่ต้องรอแอดมิน
+  // ถ้า SlipOK ล่มหรือยังไม่ได้ตั้งค่า ก็แค่ตกกลับไปใช้วิธีเดิม ใบสมัครไม่พัง
+  let auto = { ran: false, reason: 'skipped', slipCheck: null };
+  try {
+    auto = await autoVerifySlip(db.getRegistration(reg.id));
+  } catch (e) {
+    console.error('SlipOK auto-verify:', (e && e.message) || e);
+  }
+
+  const autoPaid = !!(auto && auto.slipCheck && auto.slipCheck.autoPaid);
+  if (autoPaid) await markPaidAndNotify(reg.id, 'ตรวจสลิปอัตโนมัติผ่าน (SlipOK)');
+  const updated = db.getRegistration(reg.id);
+
+  res.json({
+    ok: true,
+    registration: updated,
+    autoVerified: autoPaid,
+    slipCheck: (auto && auto.slipCheck) || null
+  });
+
+  // ถ้าลูกค้าผูกไลน์ไว้แล้ว ตอบกลับทางไลน์ทันที (ไม่ต้องรอแอดมิน)
   if (updated && updated.lineUserId && lineConfigured()) {
     const ws0 = db.getWorkshop(updated.workshopId);
-    pushMessage(updated.lineUserId, LINE.buildSlipReceivedMessage(updated, ws0, roundOf(ws0, updated.roundId)))
-      .catch((e) => console.error('LINE slip ack:', e.message));
+    const round0 = roundOf(ws0, updated.roundId);
+    const msg = autoPaid
+      ? buildConfirmationMessage(updated, ws0, round0)
+      : LINE.buildSlipReceivedMessage(updated, ws0, round0);
+    pushMessage(updated.lineUserId, msg).catch((e) => console.error('LINE slip ack:', e.message));
   }
   if (updated && !updated.isTest) {
     const ws1 = db.getWorkshop(updated.workshopId);
@@ -465,23 +576,8 @@ app.get('/api/admin/registrations', requireAdmin, (req, res) => {
 // admin marks a registration as paid manually (e.g. bank transfer verified)
 // -> auto-sends a confirmation email to the participant (if EMAIL_* configured & email present)
 app.post('/api/admin/registrations/:id/mark-paid', requireAdmin, async (req, res) => {
-  const reg = db.updateRegistration(req.params.id, { status: 'paid', paidAt: new Date().toISOString() });
-  if (!reg) return res.status(404).json({ error: 'not found' });
-
-  let emailResult = { sent: false };
-  try {
-    const ws = db.getWorkshop(reg.workshopId);
-    const round = roundOf(ws, reg.roundId);
-    emailResult = await sendConfirmationEmail(reg, ws, round);
-    if (emailResult.sent) {
-      db.updateRegistration(reg.id, {
-        confirmationEmailSentAt: new Date().toISOString()
-      });
-    }
-  } catch (e) {
-    emailResult = { sent: false, error: String(e && e.message ? e.message : e) };
-  }
-
+  if (!db.getRegistration(req.params.id)) return res.status(404).json({ error: 'not found' });
+  const { reg, emailResult } = await markPaidAndNotify(req.params.id);
   res.json({ ...reg, emailResult });
 });
 
@@ -628,9 +724,11 @@ async function handleLineEvent(ev, req) {
   if (!userId) return;
 
   if (ev.type === 'follow') {
-    return LINE.reply(ev.replyToken, LINE.buildWelcomeMessage());
+    // แนบปุ่ม "ฝากกิจกรรม" ไว้ใต้ข้อความต้อนรับ เผื่อคนที่แอดเพื่อนมาเพื่อฝากกิจกรรมเพื่อนบ้าน
+    return LINE.reply(ev.replyToken, [{ type: 'text', text: LINE.buildWelcomeMessage(), quickReply: NBCHAT.startQuickReply() }]);
   }
-  if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
+  // ปุ่มกด รูป เสียง ตำแหน่ง สติกเกอร์ → ระบบฝากกิจกรรมเพื่อนบ้าน (ถ้าไม่เกี่ยว ระบบนั้นจะเงียบเอง)
+  if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return NBCHAT.handleLineEvent(ev, req);
 
   const text = String(ev.message.text || '');
 
@@ -644,7 +742,9 @@ async function handleLineEvent(ev, req) {
   }
 
   const m = text.match(/reg_[a-z0-9]+/i);
-  if (!m) return; // ข้อความอื่น ๆ ปล่อยให้แอดมินตอบเองในแอป LINE OA
+  // ข้อความอื่น ๆ: ถ้าพิมพ์ "ฝากกิจกรรม" หรือกำลังตอบคำถามฝากกิจกรรมอยู่ ระบบเพื่อนบ้านรับไป
+  // นอกนั้นปล่อยให้แอดมินตอบเองในแอป LINE OA เหมือนเดิม
+  if (!m) return NBCHAT.handleLineEvent(ev, req);
 
   const id = m[0].toLowerCase();
   const reg = db.getRegistration(id);
@@ -715,7 +815,7 @@ app.post('/api/admin/report-settings', requireAdmin, (req, res) => {
 app.post('/api/admin/report-now', requireAdmin, async (req, res) => {
   const s = db.getSettings();
   if (!s.ownerUserId) return res.status(400).json({ error: 'ยังไม่ได้ผูกบัญชีไลน์แอดมิน' });
-  const ok = await LINE.pushMessage(s.ownerUserId, LINE.buildDailyReport(todayReport()));
+  const ok = await LINE.pushMessage(s.ownerUserId, LINE.buildDailyReport(todayReport()) + NBCHAT.reportLine());
   res.json({ ok });
 });
 
@@ -738,6 +838,7 @@ app.get('/api/admin/summary', requireAdmin, async (req, res) => {
     confirmed: regs.filter((r) => r.status === 'confirmed').length,
     attended: regs.filter((r) => r.attended).length,
     waitlist: db.listWaitlist().length,
+    slipQuota: { ...db.slipQuotaStatus(), configured: slipokConfigured() },
     revenue: regs
       .filter((r) => r.status === 'paid' || r.status === 'confirmed')
       .reduce((s, r) => s + Number(r.amount || 0), 0),
@@ -912,7 +1013,7 @@ async function runDueJobs() {
     const at = Number.isFinite(Number(s.reportHour)) ? Number(s.reportHour) : 20;
     if (hour < at || s.lastReportDate === date) return;
     db.saveSettings({ lastReportDate: date });          // กันส่งซ้ำก่อน แล้วค่อยส่ง
-    await LINE.pushMessage(s.ownerUserId, LINE.buildDailyReport(todayReport()));
+    await LINE.pushMessage(s.ownerUserId, LINE.buildDailyReport(todayReport()) + NBCHAT.reportLine());
     console.log('ส่งรายงานประจำวันเข้าไลน์แล้ว ' + date);
   } catch (e) {
     console.error('รายงานประจำวัน:', e.message);
@@ -922,8 +1023,10 @@ async function runDueJobs() {
 }
 setInterval(() => { runDueJobs().catch(() => {}); }, 60e3);
 
-db.init()
-  .catch((e) => console.error('DB init error:', e.message))
+Promise.all([
+  db.init().catch((e) => console.error('DB init error:', e.message)),
+  NEIGHBORS.init().catch((e) => console.error('เพื่อนบ้าน init error:', e.message))
+])
   .finally(() => {
     app.listen(PORT, () => {
       console.log(`\n🌿 BARNBARN Workshop running:`);

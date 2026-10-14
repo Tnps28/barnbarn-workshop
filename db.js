@@ -457,3 +457,54 @@ export function repairOrphanRegistrations() {
   if (fixed) write(db);
   return { fixed, unresolved };
 }
+
+// ---------- โควตาตรวจสลิป SlipOK ----------
+// แพ็กฟรี OK BASIC = 100 สลิป/เดือน · เกินจากนั้น SlipOK คิด 1.00 ฿/สลิป
+// กติกาที่ตั้งใจไว้: ห้ามเกินโควตาเด็ดขาด ยอมไม่ตรวจดีกว่าโดนเรียกเก็บเงิน
+//
+// SLIPOK_MONTHLY_CAP  จำนวนครั้งสูงสุดต่อรอบ (ไม่ตั้ง = 100)
+// SLIPOK_CYCLE_DAY    วันที่เริ่มรอบบิลของแพ็ก (ไม่ตั้ง = 1)
+//                     ตั้งให้ตรงกับวันที่สมัคร SlipOK จะได้ไม่เผลอยิงเกินคาบของเขา
+
+export function slipQuotaPeriod(now = new Date()) {
+  const cycleDay = Math.min(28, Math.max(1, Number(process.env.SLIPOK_CYCLE_DAY) || 1));
+  // บวก 7 ชั่วโมงให้เป็นเวลาไทยเสมอ ไม่ว่าเครื่องที่รันจะตั้งโซนเวลาอะไรไว้
+  const bkk = new Date(now.getTime() + 7 * 3600 * 1000);
+  let y = bkk.getUTCFullYear();
+  let m = bkk.getUTCMonth();
+  if (bkk.getUTCDate() < cycleDay) {
+    m -= 1;
+    if (m < 0) { m = 11; y -= 1; }
+  }
+  return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(cycleDay).padStart(2, '0');
+}
+
+export function slipQuotaStatus() {
+  const s = getSettings();
+  const capEnv = Number(process.env.SLIPOK_MONTHLY_CAP);
+  const cap = Number.isFinite(capEnv) && capEnv >= 0 ? Math.floor(capEnv) : 100;
+  const period = slipQuotaPeriod();
+  const used = s.slipQuotaPeriod === period ? Math.max(0, Number(s.slipQuotaUsed) || 0) : 0;
+  return { period, used, cap, left: Math.max(0, cap - used) };
+}
+
+// จองสิทธิ์ 1 ครั้งก่อนยิง API — คืน ok:false ถ้าโควตารอบนี้หมดแล้ว
+// ตั้งใจให้ "จองก่อนยิง" ไม่ใช่ "ยิงแล้วค่อยนับ" เพราะถ้าเน็ตพังกลางทาง
+// เราไม่มีทางรู้ว่า SlipOK นับให้หรือยัง ยอมเสียสิทธิ์ฟรี 1 ครั้งปลอดภัยกว่าโดนบิล
+// ทั้งฟังก์ชันเป็น sync ไม่มี await คั่น สองคำขอที่มาพร้อมกันจึงจองทับกันไม่ได้
+export function reserveSlipCheck() {
+  const q = slipQuotaStatus();
+  if (q.left <= 0) return { ok: false, ...q };
+  saveSettings({ slipQuotaPeriod: q.period, slipQuotaUsed: q.used + 1 });
+  return { ok: true, period: q.period, cap: q.cap, used: q.used + 1, left: q.cap - q.used - 1 };
+}
+
+// กันสลิปใบเดียวถูกเอามาใช้สองใบสมัคร (SlipOK กันให้ชั้นหนึ่งแล้ว นี่คือชั้นที่สอง ไม่เปลืองโควตา)
+export function findRegistrationBySlipRef(transRef, exceptId) {
+  const ref = String(transRef || '').trim();
+  if (!ref) return null;
+  const db = read();
+  return db.registrations.find(
+    (r) => r.id !== exceptId && r.slipCheck && r.slipCheck.transRef === ref
+  ) || null;
+}
