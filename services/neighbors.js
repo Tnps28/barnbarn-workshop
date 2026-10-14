@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { qrPng } from './qr.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIR = path.join(__dirname, '..', 'data');
@@ -22,7 +23,9 @@ const MEDIA_DIR = path.join(DIR, 'neighbor-media');
 export const STATUS = { DRAFT: 'draft', PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', HIDDEN: 'hidden' };
 
 const MAX_MEDIA_BYTES = 9 * 1024 * 1024;   // ไฟล์เดียวต้องไม่เกิน ~9MB (เอกสาร Mongo รับได้ 16MB)
-export const MAX_PHOTOS = 3;
+export const MAX_PHOTOS = 3;           // รูปกิจกรรม
+export const MAX_POSTERS = 2;          // รูปใบประกาศ/โปสเตอร์ (เก็บแยกจากรูปกิจกรรม)
+export const WANTS = ['qr', 'map', 'register'];   // ขอให้บ้าน-บ้านช่วย: ทำ QR Code / ยิงหมุด Google Map / ระบบลงทะเบียน
 
 let items = [];                 // ทุกกิจกรรม ไม่มีตัวไฟล์รูป/เสียงอยู่ในนี้ มีแค่รหัสอ้างอิง
 let col = null, mediaCol = null;
@@ -59,6 +62,7 @@ export function blank(extra = {}) {
     timeText: '',              // "ช่วงเช้า" / "09:30 น." / "บ่ายสอง"
     placeName: '',
     placeAddress: '',
+    addrSrc: '',               // ที่มาของที่อยู่: osm (แปลงจากหมุดเป็นภาษาไทย) | line | user
     lat: null,
     lng: null,
     mapUrl: '',
@@ -68,8 +72,11 @@ export function blank(extra = {}) {
     hostName: '',
     phone: '',
     showPhone: true,
-    photos: [],                // [{ id, size, type }]
+    photos: [],                // รูปกิจกรรม [{ id, size, type }] — รูปแรกคือรูปบนการ์ด
     pendingPhotos: [],         // รหัสข้อความรูปในไลน์ที่ยังโหลดไม่สำเร็จ (ระบบลองใหม่เอง)
+    posters: [],               // รูปใบประกาศ [{ id, size, type }]
+    pendingPosters: [],
+    wants: [],                 // ขอให้บ้าน-บ้านช่วย (ไม่ขึ้นเว็บ) — ดู WANTS
     voices: [],                // [{ id, size, type, duration, step, status, messageId }]
     lineUserId: '',
     lineDisplayName: '',
@@ -165,7 +172,7 @@ export async function remove(id) {
   const it = get(id);
   if (!it) return false;
   items = items.filter((x) => x.id !== id);
-  const mediaIds = [...(it.photos || []), ...(it.voices || [])].map((m) => m.id).filter(Boolean);
+  const mediaIds = mediaOf(it).map((m) => m.id).filter(Boolean);
   if (col) {
     chain = chain.then(() => col.deleteOne({ _id: id })).catch((e) => console.error('เพื่อนบ้าน: ลบไม่สำเร็จ', e.message));
   } else saveFile();
@@ -174,6 +181,7 @@ export async function remove(id) {
 }
 
 // ---------------------------------------------------------------- รูป/เสียง
+const mediaOf = (it) => [...(it.photos || []), ...(it.posters || []), ...(it.voices || [])];
 const cache = new Map();          // id → { kind, type, buf }  เก็บรูปที่เปิดบ่อยไว้ในหน่วยความจำ
 let cacheBytes = 0;
 const CACHE_CAP = 24 * 1024 * 1024;
@@ -284,6 +292,7 @@ export function publicView(it) {
     timeText: it.timeText || '',
     placeName: it.placeName || '',
     placeAddress: it.placeAddress || '',
+    osm: !!(it.placeAddress && it.addrSrc === 'osm'),     // ที่อยู่ได้จาก OpenStreetMap → หน้าเว็บใส่เครดิต
     lat: Number.isFinite(it.lat) ? it.lat : null,
     lng: Number.isFinite(it.lng) ? it.lng : null,
     mapUrl: it.mapUrl || '',
@@ -293,6 +302,7 @@ export function publicView(it) {
     hostName: it.hostName || '',
     phone: it.showPhone && it.phone ? it.phone : '',
     photos: (it.photos || []).map((p) => p.id),
+    posters: (it.posters || []).map((p) => p.id),
     approvedAt: it.reviewedAt || it.submittedAt || it.createdAt
   };
 }
@@ -339,9 +349,9 @@ export async function cleanup({ force = false } = {}) {
     const end = endOf(it);
     const oldEnded = it.status === STATUS.APPROVED && end && addDays(end, 30) < today;
     const oldRejected = it.status === STATUS.REJECTED && ageDays(it.reviewedAt) > 14;
-    if ((oldEnded || oldRejected) && ((it.photos || []).length || (it.voices || []).length)) {
-      const ids = [...(it.photos || []), ...(it.voices || [])].map((m) => m.id).filter(Boolean);
-      it.photos = []; it.voices = [];
+    if ((oldEnded || oldRejected) && mediaOf(it).length) {
+      const ids = mediaOf(it).map((m) => m.id).filter(Boolean);
+      it.photos = []; it.posters = []; it.voices = []; it.pendingPhotos = []; it.pendingPosters = [];
       persist(it);
       await deleteMedia(ids);
       slimmed++;
@@ -372,6 +382,10 @@ export function cleanFields(b = {}) {
     const lat = Number(b.lat), lng = Number(b.lng);
     const ok = b.lat !== '' && b.lng !== '' && b.lat !== null && b.lng !== null && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
     out.lat = ok ? lat : null; out.lng = ok ? lng : null;
+  }
+  if (b.wants !== undefined) {
+    const w = Array.isArray(b.wants) ? b.wants.map(String) : [];
+    out.wants = WANTS.filter((k) => w.includes(k));
   }
   if (out.endDate && out.date && out.endDate < out.date) out.endDate = '';
   return out;
@@ -407,6 +421,23 @@ export function mountNeighbors(app, d) {
     }
   });
 
+  // QR Code ของกิจกรรม — สแกนแล้วเปิดการ์ดกิจกรรมบนหน้าเว็บ (ส่งให้ผู้ฝากทางไลน์ตอนขึ้นเว็บ ถ้าขอไว้ / แอดมินกดโหลดได้)
+  // ?dl=1 = ดาวน์โหลดเป็นไฟล์
+  app.get('/api/neighbors/qr/:id.png', (req, res) => {
+    const it = /^nb_[a-f0-9]{18}$/.test(req.params.id) ? get(req.params.id) : null;
+    const base = reqBase(req);
+    if (!it || !base) return res.status(404).end();
+    const png = qrPng(`${base}/#nb-${it.id}`, { scale: 12, quiet: 4 });
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=86400');
+    if (req.query.dl) {
+      // ตัดตามตัวอักษร (ไม่ผ่าอีโมจิครึ่งตัว — ไม่งั้น encodeURIComponent จะพัง)
+      const name = Array.from(('QR-' + (it.title || 'กิจกรรม')).replace(/[\\/:*?"<>|\r\n]+/g, ' ')).slice(0, 60).join('').trim() + '.png';
+      res.set('Content-Disposition', `attachment; filename="qr-${it.id}.png"; filename*=UTF-8''${encodeURIComponent(name)}`);
+    }
+    res.send(png);
+  });
+
   // ---- แอดมิน ----
   app.get('/api/admin/neighbors', requireAdmin, (req, res) => {
     const today = bkkToday();
@@ -431,10 +462,15 @@ export function mountNeighbors(app, d) {
     res.json(it);
   });
 
+  // หน้าแอดมินส่งมาเฉพาะช่องที่แก้ — ตรวจวันที่กับค่าที่มีอยู่แล้วด้วย (แก้แค่ "วันที่" ให้เลยวันสุดท้ายเดิม → ล้างวันสุดท้าย)
   app.put('/api/admin/neighbors/:id', requireAdmin, (req, res) => {
     const it = get(req.params.id);
     if (!it) return res.status(404).json({ error: 'ไม่พบรายการนี้' });
-    res.json(update(it.id, cleanFields(req.body || {})));
+    const out = cleanFields(req.body || {});
+    const date = out.date !== undefined ? out.date : it.date;
+    const endDate = out.endDate !== undefined ? out.endDate : it.endDate;
+    if (isYmd(date) && isYmd(endDate) && endDate < date) out.endDate = '';
+    res.json(update(it.id, out));
   });
 
   // เปลี่ยนสถานะ: approved | rejected | hidden | pending  (+ แจ้งผู้ส่งทางไลน์ถ้าเลือก)
@@ -449,21 +485,33 @@ export function mountNeighbors(app, d) {
     res.json(r);
   });
 
-  // รูปที่แอดมินอัปเอง (ย่อในเบราว์เซอร์มาแล้ว) — replaceId = แทนรูปเดิม (ใช้ตอนย่อรูปใหญ่)
+  // รูปที่แอดมินอัปเอง (ย่อในเบราว์เซอร์มาแล้ว) — slot = photo (รูปกิจกรรม) | poster (ใบประกาศ)
+  // replaceId = แทนรูปเดิม (ใช้ตอนย่อรูปใหญ่) ได้ทั้งสองช่อง
   app.post('/api/admin/neighbors/:id/photo', requireAdmin, async (req, res) => {
     const it = get(req.params.id);
     if (!it) return res.status(404).json({ error: 'ไม่พบรายการนี้' });
-    const m = String((req.body && req.body.image) || '').match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+    const b = req.body || {};
+    const m = String(b.image || '').match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
     if (!m) return res.status(400).json({ error: 'ไฟล์รูปไม่ถูกต้อง' });
     const buf = Buffer.from(m[2], 'base64');
     if (buf.length > 3 * 1024 * 1024) return res.status(400).json({ error: 'รูปใหญ่เกินไป' });
-    const replaceId = String((req.body && req.body.replaceId) || '');
-    const idx = replaceId ? it.photos.findIndex((p) => p.id === replaceId) : -1;
-    if (idx < 0 && it.photos.length >= MAX_PHOTOS) return res.status(400).json({ error: `ใส่รูปได้สูงสุด ${MAX_PHOTOS} รูป` });
+    it.photos = it.photos || []; it.posters = it.posters || [];
+    const replaceId = String(b.replaceId || '');
+    let key = b.slot === 'poster' ? 'posters' : 'photos';
+    let idx = -1;
+    if (replaceId) {
+      idx = it.photos.findIndex((p) => p.id === replaceId);
+      if (idx >= 0) key = 'photos';
+      else { idx = it.posters.findIndex((p) => p.id === replaceId); if (idx >= 0) key = 'posters'; }
+      // รูปที่จะแทนไม่อยู่แล้ว (เช่น ย่อซ้ำสองรอบ) — อย่าเพิ่มเป็นรูปใหม่
+      if (idx < 0) return res.status(409).json({ error: 'รูปนี้ถูกเปลี่ยนไปแล้ว' });
+    }
+    const max = key === 'posters' ? MAX_POSTERS : MAX_PHOTOS;
+    if (idx < 0 && it[key].length >= max) return res.status(400).json({ error: key === 'posters' ? `ใบประกาศใส่ได้สูงสุด ${MAX_POSTERS} รูป` : `รูปกิจกรรมใส่ได้สูงสุด ${MAX_PHOTOS} รูป` });
     try {
       const saved = await putMedia({ kind: 'image', type: m[1], buf, activityId: it.id });
-      if (idx >= 0) { const old = it.photos[idx]; it.photos[idx] = saved; touch(it); await deleteMedia([old.id]); }
-      else { it.photos.push(saved); touch(it); }
+      if (idx >= 0) { const old = it[key][idx]; it[key][idx] = saved; touch(it); await deleteMedia([old.id]); }
+      else { it[key].push(saved); touch(it); }
       res.json(it);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -471,18 +519,42 @@ export function mountNeighbors(app, d) {
   app.delete('/api/admin/neighbors/:id/photo/:mid', requireAdmin, async (req, res) => {
     const it = get(req.params.id);
     if (!it) return res.status(404).json({ error: 'ไม่พบรายการนี้' });
-    const before = it.photos.length;
-    it.photos = it.photos.filter((p) => p.id !== req.params.mid);
-    if (it.photos.length !== before) { touch(it); await deleteMedia([req.params.mid]); }
+    const mid = req.params.mid;
+    const before = (it.photos || []).length + (it.posters || []).length;
+    it.photos = (it.photos || []).filter((p) => p.id !== mid);
+    it.posters = (it.posters || []).filter((p) => p.id !== mid);
+    if (it.photos.length + it.posters.length !== before) { touch(it); await deleteMedia([mid]); }
     res.json(it);
   });
 
-  // ตั้งเป็นรูปหลัก (รูปแรกคือรูปบนการ์ด)
+  // ตั้งเป็นรูปหลัก (รูปกิจกรรมรูปแรกคือรูปบนการ์ด) · ใช้กับใบประกาศได้ด้วย (เลื่อนขึ้นเป็นหน้าแรก)
   app.post('/api/admin/neighbors/:id/cover/:mid', requireAdmin, (req, res) => {
     const it = get(req.params.id);
     if (!it) return res.status(404).json({ error: 'ไม่พบรายการนี้' });
-    const i = it.photos.findIndex((p) => p.id === req.params.mid);
-    if (i > 0) { const [p] = it.photos.splice(i, 1); it.photos.unshift(p); touch(it); }
+    for (const key of ['photos', 'posters']) {
+      const list = it[key] || [];
+      const i = list.findIndex((p) => p.id === req.params.mid);
+      if (i > 0) { const [p] = list.splice(i, 1); list.unshift(p); touch(it); }
+    }
+    res.json(it);
+  });
+
+  // ย้ายรูประหว่าง "รูปกิจกรรม" กับ "ใบประกาศ" (ผู้ส่งเลือกช่องผิด)
+  app.post('/api/admin/neighbors/:id/move/:mid', requireAdmin, (req, res) => {
+    const it = get(req.params.id);
+    if (!it) return res.status(404).json({ error: 'ไม่พบรายการนี้' });
+    it.photos = it.photos || []; it.posters = it.posters || [];
+    const mid = req.params.mid;
+    let from = it.photos.some((p) => p.id === mid) ? 'photos' : it.posters.some((p) => p.id === mid) ? 'posters' : '';
+    if (!from) return res.status(404).json({ error: 'ไม่พบรูปนี้' });
+    const to = from === 'photos' ? 'posters' : 'photos';
+    if (it[to].length >= (to === 'posters' ? MAX_POSTERS : MAX_PHOTOS)) {
+      return res.status(400).json({ error: to === 'posters' ? `ใบประกาศเต็มแล้ว (${MAX_POSTERS} รูป)` : `รูปกิจกรรมเต็มแล้ว (${MAX_PHOTOS} รูป)` });
+    }
+    const i = it[from].findIndex((p) => p.id === mid);
+    const [p] = it[from].splice(i, 1);
+    it[to].push(p);
+    touch(it);
     res.json(it);
   });
 
